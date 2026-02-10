@@ -9,6 +9,12 @@ A powerful Text User Interface (TUI) file manager for Termux that helps you mana
 - **File Operations**: Copy, move, delete, and manage files and directories
 - **Keyboard-Driven**: Efficient keyboard shortcuts for all operations
 - **Modern TUI**: Built with Textual for a responsive and intuitive interface
+- **Automation Tools**: Command-line utilities for batch operations
+  - Organize files by type or date
+  - Search files by name, content, or size
+  - Find and manage duplicate files
+  - Clean up old files
+  - Batch rename operations
 
 ## Installation
 
@@ -44,6 +50,7 @@ python run.py
 
 ### Start the file manager
 
+**Interactive TUI:**
 ```bash
 tfm
 ```
@@ -51,6 +58,21 @@ tfm
 Or if running without installation:
 ```bash
 python run.py
+```
+
+**Automation CLI:**
+```bash
+tfm-auto --help
+```
+
+Or without installation:
+```bash
+python src/file_manager/cli.py --help
+```
+
+**Demo script:**
+```bash
+python demo.py
 ```
 
 ### Keyboard Shortcuts
@@ -69,6 +91,39 @@ python run.py
 | `h` | Show help |
 | `q` | Quit application |
 
+### Automation CLI Commands
+
+**Organize files by type:**
+```bash
+tfm-auto organize --source ~/Downloads --target ~/Organized --by-type
+```
+
+**Organize files by date:**
+```bash
+tfm-auto organize --source ~/Downloads --target ~/Organized --by-date
+```
+
+**Search for files:**
+```bash
+tfm-auto search --dir ~/Documents --name "*.pdf"
+tfm-auto search --dir ~/Documents --content "important"
+```
+
+**Find duplicate files:**
+```bash
+tfm-auto duplicates --dir ~/Downloads
+```
+
+**Clean up old files:**
+```bash
+tfm-auto cleanup --dir ~/Downloads --days 30 --dry-run
+```
+
+**Batch rename files:**
+```bash
+tfm-auto rename --dir ~/Photos --pattern "IMG_" --replacement "Photo_"
+```
+
 ## Architecture
 
 The file manager consists of:
@@ -76,6 +131,9 @@ The file manager consists of:
 - **app.py**: Main application with dual-pane layout and keyboard bindings
 - **file_panel.py**: Individual file panel widget with directory tree
 - **file_operations.py**: Core file operation functions (copy, move, delete, etc.)
+- **search.py**: File search functionality (by name, content, size)
+- **automation.py**: Automation tools for file organization and batch operations
+- **cli.py**: Command-line interface for automation features
 
 ## Default Locations
 
@@ -105,12 +163,16 @@ automatic-tribble/
 ├── src/
 │   └── file_manager/
 │       ├── __init__.py
-│       ├── app.py              # Main application
+│       ├── app.py              # Main TUI application
 │       ├── file_panel.py       # File panel widget
-│       └── file_operations.py  # File operations
+│       ├── file_operations.py  # File operations
+│       ├── search.py           # Search functionality
+│       ├── automation.py       # Automation features
+│       └── cli.py              # CLI for automation
 ├── requirements.txt
 ├── setup.py
-├── run.py
+├── run.py                      # Quick run script
+├── demo.py                     # Feature demonstration
 └── README.md
 ```
 

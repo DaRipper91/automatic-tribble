@@ -14,6 +14,7 @@ setup(
     entry_points={
         "console_scripts": [
             "tfm=file_manager.app:main",
+            "tfm-auto=file_manager.cli:main",
         ],
     },
     python_requires=">=3.8",
