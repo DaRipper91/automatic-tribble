@@ -10,6 +10,10 @@ from datetime import datetime, timedelta
 import os
 
 
+# Constants
+SECONDS_PER_DAY = 86400
+
+
 class FileOrganizer:
     """Handles automated file organization tasks."""
     
@@ -150,7 +154,7 @@ class FileOrganizer:
         Returns:
             List of files that were (or would be) deleted
         """
-        cutoff_time = datetime.now().timestamp() - (days_old * 86400)
+        cutoff_time = datetime.now().timestamp() - (days_old * SECONDS_PER_DAY)
         old_files = []
         
         if recursive:

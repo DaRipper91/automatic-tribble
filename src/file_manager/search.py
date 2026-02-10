@@ -8,6 +8,10 @@ from typing import List, Callable, Optional
 import fnmatch
 
 
+# Constants
+FILE_TYPE_CHECK_BYTES = 512
+
+
 class FileSearcher:
     """Handles file and directory searching."""
     
@@ -201,7 +205,7 @@ class FileSearcher:
         # Try reading first few bytes
         try:
             with open(file_path, 'rb') as f:
-                chunk = f.read(512)
+                chunk = f.read(FILE_TYPE_CHECK_BYTES)
                 # Check for null bytes (common in binary files)
                 if b'\x00' in chunk:
                     return False
