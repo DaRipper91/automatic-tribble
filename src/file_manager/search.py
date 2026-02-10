@@ -206,5 +206,5 @@ class FileSearcher:
                 if b'\x00' in chunk:
                     return False
                 return True
-        except:
+        except (IOError, OSError):
             return False

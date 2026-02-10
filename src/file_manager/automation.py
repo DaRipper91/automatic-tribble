@@ -2,10 +2,12 @@
 Automation features for file organization and management.
 """
 
+import hashlib
 import shutil
 from pathlib import Path
 from typing import Dict, List, Callable, Optional
 from datetime import datetime, timedelta
+import os
 
 
 class FileOrganizer:
@@ -152,9 +154,10 @@ class FileOrganizer:
         old_files = []
         
         if recursive:
-            for root, _, files in directory.walk():
+            for root, _, files in os.walk(directory):
+                root_path = Path(root)
                 for file_name in files:
-                    file_path = root / file_name
+                    file_path = root_path / file_name
                     if file_path.stat().st_mtime < cutoff_time:
                         old_files.append(file_path)
                         if not dry_run:
@@ -172,7 +175,7 @@ class FileOrganizer:
         self,
         directory: Path,
         recursive: bool = True
-    ) -> Dict[int, List[Path]]:
+    ) -> Dict[str, List[Path]]:
         """
         Find duplicate files based on size and content.
         
@@ -181,17 +184,16 @@ class FileOrganizer:
             recursive: Whether to search subdirectories
             
         Returns:
-            Dictionary mapping file sizes to lists of potential duplicates
+            Dictionary mapping file hashes to lists of duplicate files
         """
-        import hashlib
-        
         # First group by size (quick)
         size_groups: Dict[int, List[Path]] = {}
         
         if recursive:
-            for root, _, files in directory.walk():
+            for root, _, files in os.walk(directory):
+                root_path = Path(root)
                 for file_name in files:
-                    file_path = root / file_name
+                    file_path = root_path / file_name
                     try:
                         size = file_path.stat().st_size
                         if size not in size_groups:
@@ -255,12 +257,13 @@ class FileOrganizer:
         renamed_files = []
         
         if recursive:
-            for root, _, files in directory.walk():
+            for root, _, files in os.walk(directory):
+                root_path = Path(root)
                 for file_name in files:
                     if pattern in file_name:
-                        old_path = root / file_name
+                        old_path = root_path / file_name
                         new_name = file_name.replace(pattern, replacement)
-                        new_path = root / new_name
+                        new_path = root_path / new_name
                         
                         old_path.rename(new_path)
                         renamed_files.append(new_path)
@@ -310,8 +313,6 @@ class FileOrganizer:
         Returns:
             Hex digest of the file hash
         """
-        import hashlib
-        
         sha256_hash = hashlib.sha256()
         
         with open(file_path, "rb") as f:

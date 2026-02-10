@@ -32,7 +32,7 @@ class FileOperations:
         if source.is_file():
             shutil.copy2(source, target)
         elif source.is_dir():
-            shutil.copytree(source, target, dirs_exist_ok=False)
+            shutil.copytree(source, target, dirs_exist_ok=True)
     
     def move(self, source: Union[str, Path], destination: Union[str, Path]) -> None:
         """
