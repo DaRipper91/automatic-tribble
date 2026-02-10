@@ -124,6 +124,8 @@ tfm-auto cleanup --dir ~/Downloads --days 30 --dry-run
 tfm-auto rename --dir ~/Photos --pattern "IMG_" --replacement "Photo_"
 ```
 
+For detailed usage instructions and examples, see [USAGE.md](USAGE.md).
+
 ## Architecture
 
 The file manager consists of:
