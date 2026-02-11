@@ -29,6 +29,9 @@ class FileOperations:
         
         target = destination / source.name
         
+        if target.exists():
+            raise FileExistsError(f"Destination already exists: {target}")
+
         if source.is_file():
             shutil.copy2(source, target)
         elif source.is_dir():
@@ -52,6 +55,10 @@ class FileOperations:
             raise NotADirectoryError(f"Destination is not a directory: {destination}")
         
         target = destination / source.name
+
+        if target.exists():
+            raise FileExistsError(f"Destination already exists: {target}")
+
         shutil.move(str(source), str(target))
     
     def delete(self, path: Union[str, Path]) -> None:
