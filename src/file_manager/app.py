@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Main application entry point for Termux File Manager
+Main application entry point for File Manager
 """
 
 import os
@@ -18,7 +18,7 @@ from .file_panel import FilePanel
 
 
 class FileManagerApp(App):
-    """A dual-pane file manager TUI for Termux."""
+    """A dual-pane file manager TUI."""
     
     CSS = """
     Screen {
@@ -67,7 +67,7 @@ class FileManagerApp(App):
         Binding("ctrl+r", "refresh", "Refresh"),
     ]
     
-    TITLE = "Termux File Manager"
+    TITLE = "File Manager"
     
     active_panel = reactive(0)  # 0 for left, 1 for right
     
@@ -75,9 +75,9 @@ class FileManagerApp(App):
         super().__init__()
         self.file_ops = FileOperations()
         
-        # Default paths
-        self.termux_home = Path.home()
-        self.android_storage = Path("/sdcard") if Path("/sdcard").exists() else Path.home()
+        # Default paths - both panels start at home directory
+        self.left_path = Path.home()
+        self.right_path = Path.home()
         
     def compose(self) -> ComposeResult:
         """Create the layout."""
@@ -86,19 +86,19 @@ class FileManagerApp(App):
         with Container(id="main-container"):
             with Horizontal(id="panels-container"):
                 yield FilePanel(
-                    str(self.termux_home),
+                    str(self.left_path),
                     id="left-panel",
                     classes="file-panel active"
                 )
                 yield FilePanel(
-                    str(self.android_storage),
+                    str(self.right_path),
                     id="right-panel", 
                     classes="file-panel"
                 )
             
             with Vertical(id="status-bar"):
                 yield Label(
-                    f"Termux Home: {self.termux_home} | Android Storage: {self.android_storage}",
+                    f"Left: {self.left_path} | Right: {self.right_path}",
                     id="paths-info"
                 )
                 yield Label(

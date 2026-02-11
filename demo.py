@@ -81,7 +81,7 @@ def demo_file_operations():
 def main():
     """Run all demos."""
     print("\n" + "╔" + "=" * 58 + "╗")
-    print("║" + " " * 10 + "Termux File Manager - Feature Demo" + " " * 12 + "║")
+    print("║" + " " * 15 + "File Manager - Feature Demo" + " " * 15 + "║")
     print("╚" + "=" * 58 + "╝")
     
     demo_search()

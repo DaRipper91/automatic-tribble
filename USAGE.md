@@ -1,4 +1,4 @@
-# Termux File Manager - Usage Guide
+# File Manager - Usage Guide
 
 ## Table of Contents
 
@@ -10,11 +10,11 @@
 
 ## Getting Started
 
-### First-Time Setup in Termux
+### First-Time Setup
 
 1. Install Python and dependencies:
 ```bash
-pkg install python git
+pip install python git
 ```
 
 2. Clone and install:
@@ -23,13 +23,6 @@ git clone https://github.com/DaRipper91/automatic-tribble.git
 cd automatic-tribble
 pip install -r requirements.txt
 ```
-
-3. Set up storage access:
-```bash
-termux-setup-storage
-```
-
-This creates symbolic links in `~/storage/` for accessing Android folders.
 
 ### Running the Application
 
@@ -49,9 +42,9 @@ python demo.py
 
 ```
 ┌─────────────────────────────────────────┐
-│ Termux File Manager                     │  ← Header
+│ File Manager                            │  ← Header
 ├──────────────────┬──────────────────────┤
-│ Termux Home      │ Android Storage      │  ← Panel Headers
+│ Left Panel       │ Right Panel          │  ← Panel Headers
 │                  │                      │
 │ Left Panel       │ Right Panel          │  ← File Lists
 │ (Active)         │                      │
@@ -214,8 +207,8 @@ tfm-auto duplicates --dir ~/storage/shared/DCIM
 
 Using TUI:
 1. Run `python run.py`
-2. Navigate in left panel to Termux file
-3. Navigate in right panel to Android destination
+2. Navigate in left panel to desired source file
+3. Navigate in right panel to desired destination
 4. Press `c` to copy or `m` to move
 
 ### Task 5: Search for Specific Files
@@ -233,13 +226,9 @@ tfm-auto search --dir ~/Documents --content "password"
 
 ## Tips and Tricks
 
-### 1. Use Symbolic Links
+### 1. Navigate Efficiently
 
-After running `termux-setup-storage`, use these shortcuts:
-- `~/storage/shared` - Internal storage
-- `~/storage/downloads` - Downloads folder
-- `~/storage/dcim` - Camera folder
-- `~/storage/music` - Music folder
+Navigate between directories using arrow keys and Enter to open folders.
 
 ### 2. Automate Regular Tasks
 
@@ -249,13 +238,13 @@ Create a script to organize downloads weekly:
 #!/bin/bash
 # organize-weekly.sh
 tfm-auto organize \
-    --source ~/storage/downloads \
-    --target ~/storage/shared/Organized \
+    --source ~/Downloads \
+    --target ~/Organized \
     --by-date \
     --move
 
 tfm-auto cleanup \
-    --dir ~/storage/shared/Organized \
+    --dir ~/Organized \
     --days 90
 ```
 
@@ -269,9 +258,9 @@ Use wildcards for flexible searches:
 ### 4. Backup Important Files
 
 ```bash
-# Copy important files to Termux home
+# Copy important files to backup directory
 tfm-auto organize \
-    --source ~/storage/shared/Important \
+    --source ~/Important \
     --target ~/Backups \
     --by-date
 ```
@@ -284,7 +273,7 @@ Create a script to monitor large files:
 #!/bin/bash
 # find-large-files.sh
 echo "Files larger than 100MB:"
-find ~/storage/shared -type f -size +100M -ls
+find ~/ -type f -size +100M -ls
 ```
 
 ### 6. Quick File Organization
@@ -301,14 +290,6 @@ tfm-auto organize \
 ```
 
 ## Troubleshooting
-
-### Permission Errors
-
-If you get permission errors accessing `/sdcard`:
-```bash
-termux-setup-storage
-# Then accept the permission prompt
-```
 
 ### Module Not Found
 

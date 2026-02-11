@@ -1,11 +1,10 @@
-# Termux File Manager (TFM)
+# File Manager (TFM)
 
-A powerful Text User Interface (TUI) file manager for Termux that helps you manage files and folders across both Termux home directory and Android shared storage.
+A powerful Text User Interface (TUI) file manager that helps you manage files and folders efficiently.
 
 ## Features
 
 - **Dual-Pane Interface**: Navigate two directories simultaneously for easy file operations
-- **Cross-Storage Management**: Seamlessly work with both Termux home folder (`~/`) and Android shared storage (`/sdcard`)
 - **File Operations**: Copy, move, delete, and manage files and directories
 - **Keyboard-Driven**: Efficient keyboard shortcuts for all operations
 - **Modern TUI**: Built with Textual for a responsive and intuitive interface
@@ -20,7 +19,6 @@ A powerful Text User Interface (TUI) file manager for Termux that helps you mana
 
 ### Requirements
 - Python 3.8 or higher
-- Termux (for Android)
 
 ### Install from source
 
@@ -139,22 +137,8 @@ The file manager consists of:
 
 ## Default Locations
 
-- **Left Panel**: Termux home directory (`~` or `/data/data/com.termux/files/home`)
-- **Right Panel**: Android shared storage (`/sdcard` if available, otherwise `~`)
-
-## Termux Setup
-
-For proper access to Android shared storage, you need to grant Termux storage permissions:
-
-```bash
-termux-setup-storage
-```
-
-This will create symbolic links in your home directory to access Android folders:
-- `~/storage/shared` - Internal storage
-- `~/storage/downloads` - Downloads folder
-- `~/storage/dcim` - Camera folder
-- etc.
+- **Left Panel**: Home directory (`~`)
+- **Right Panel**: Home directory (`~`)
 
 ## Development
 

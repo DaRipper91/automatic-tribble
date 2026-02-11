@@ -20,7 +20,7 @@ except ImportError:
 def main():
     """Main CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Termux File Manager - Automation CLI",
+        description="File Manager - Automation CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
