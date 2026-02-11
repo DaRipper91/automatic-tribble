@@ -1,21 +1,17 @@
 
+import tempfile
 import unittest
-import shutil
-import os
 from pathlib import Path
 from src.file_manager.file_operations import FileOperations
 
 class TestFileOperations(unittest.TestCase):
     def setUp(self):
-        self.test_dir = Path("test_temp")
-        if self.test_dir.exists():
-            shutil.rmtree(self.test_dir)
-        self.test_dir.mkdir()
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.test_dir = Path(self.tempdir.name)
         self.ops = FileOperations()
 
     def tearDown(self):
-        if self.test_dir.exists():
-            shutil.rmtree(self.test_dir)
+        self.tempdir.cleanup()
 
     def test_copy_source_not_found(self):
         with self.assertRaises(FileNotFoundError):
@@ -81,6 +77,22 @@ class TestFileOperations(unittest.TestCase):
         self.assertFalse(source.exists())
         self.assertEqual(expected_path.read_text(), "hello")
 
+    def test_move_directory_success(self):
+        source_dir = self.test_dir / "source_dir"
+        source_dir.mkdir()
+        (source_dir / "file.txt").write_text("content")
+
+        dest_dir = self.test_dir / "dest_dir"
+        dest_dir.mkdir()
+
+        self.ops.move(source_dir, dest_dir)
+
+        expected_dir = dest_dir / "source_dir"
+        self.assertTrue(expected_dir.is_dir())
+        self.assertFalse(source_dir.exists())
+        self.assertTrue((expected_dir / "file.txt").exists())
+        self.assertEqual((expected_dir / "file.txt").read_text(), "content")
+
     def test_delete_not_found(self):
         with self.assertRaises(FileNotFoundError):
             self.ops.delete(self.test_dir / "nonexistent.txt")
@@ -116,6 +128,19 @@ class TestFileOperations(unittest.TestCase):
         new_path = self.test_dir / "new.txt"
         self.assertTrue(new_path.exists())
         self.assertFalse(path.exists())
+
+    def test_rename_directory_success(self):
+        dir_path = self.test_dir / "old_dir"
+        dir_path.mkdir()
+        (dir_path / "file.txt").write_text("hello")
+
+        self.ops.rename(dir_path, "new_dir")
+
+        new_dir = self.test_dir / "new_dir"
+        self.assertTrue(new_dir.is_dir())
+        self.assertFalse(dir_path.exists())
+        self.assertTrue((new_dir / "file.txt").exists())
+        self.assertEqual((new_dir / "file.txt").read_text(), "hello")
 
     def test_rename_not_found(self):
         with self.assertRaises(FileNotFoundError):
