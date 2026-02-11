@@ -4,7 +4,7 @@ Search functionality for finding files and directories.
 
 import os
 from pathlib import Path
-from typing import List, Callable, Optional
+from typing import List, Optional
 import fnmatch
 
 
