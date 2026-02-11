@@ -2,6 +2,7 @@
 File operations module for copy, move, delete, etc.
 """
 
+import os
 import shutil
 from pathlib import Path
 from typing import Union
@@ -101,6 +102,10 @@ class FileOperations:
         if not old_path.exists():
             raise FileNotFoundError(f"Path does not exist: {old_path}")
         
+        # Secure against path traversal
+        if any(sep in new_name for sep in [os.sep, os.altsep] if sep) or new_name in ('.', '..'):
+            raise ValueError("Invalid new name: path separators or reserved names not allowed")
+
         new_path = old_path.parent / new_name
         old_path.rename(new_path)
     
