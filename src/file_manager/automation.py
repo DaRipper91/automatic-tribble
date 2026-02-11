@@ -116,8 +116,15 @@ class FileOrganizer:
             date = datetime.fromtimestamp(mtime)
             date_str = date.strftime(date_format)
             
-            # Create date directory
+            # Create date directory and secure against path traversal
             date_dir = target_dir / date_str
+
+            try:
+                if not date_dir.resolve().is_relative_to(target_dir.resolve()):
+                    continue
+            except (ValueError, RuntimeError):
+                continue
+
             date_dir.mkdir(parents=True, exist_ok=True)
             
             # Move or copy file
@@ -267,6 +274,11 @@ class FileOrganizer:
                     if pattern in file_name:
                         old_path = root_path / file_name
                         new_name = file_name.replace(pattern, replacement)
+
+                        # Secure against path traversal
+                        if any(sep in new_name for sep in [os.sep, os.altsep] if sep) or new_name in ('.', '..'):
+                            continue
+
                         new_path = root_path / new_name
                         
                         old_path.rename(new_path)
@@ -275,6 +287,11 @@ class FileOrganizer:
             for file_path in directory.iterdir():
                 if file_path.is_file() and pattern in file_path.name:
                     new_name = file_path.name.replace(pattern, replacement)
+
+                    # Secure against path traversal
+                    if any(sep in new_name for sep in [os.sep, os.altsep] if sep) or new_name in ('.', '..'):
+                        continue
+
                     new_path = file_path.parent / new_name
                     
                     file_path.rename(new_path)
