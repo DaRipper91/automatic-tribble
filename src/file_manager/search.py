@@ -107,12 +107,34 @@ class FileSearcher:
                         if self._is_text_file(file_path):
                             try:
                                 with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                                    content = f.read()
-                                    if not case_sensitive:
-                                        content = content.lower()
+                                    # Optimization: Read in chunks to avoid loading large files into memory
+                                    # Use a chunk size that is reasonably large (64KB) but small enough to be memory efficient
+                                    # Ensure chunk size is larger than search text to simplify logic
+                                    chunk_size = max(64 * 1024, len(search_text) * 2)
+                                    overlap = len(search_text) - 1
+                                    buffer = ""
                                     
-                                    if search_text in content:
-                                        results.append(file_path)
+                                    while True:
+                                        chunk = f.read(chunk_size)
+                                        if not chunk:
+                                            break
+
+                                        # Combine overlap from previous chunk with current chunk
+                                        current_haystack = buffer + chunk
+                                        if not case_sensitive:
+                                            current_haystack_search = current_haystack.lower()
+                                        else:
+                                            current_haystack_search = current_haystack
+
+                                        if search_text in current_haystack_search:
+                                            results.append(file_path)
+                                            break
+
+                                        # Prepare overlap for next iteration
+                                        if overlap > 0:
+                                            buffer = current_haystack[-overlap:]
+                                        else:
+                                            buffer = ""
                             except (IOError, UnicodeDecodeError):
                                 # Skip files we can't read
                                 continue
