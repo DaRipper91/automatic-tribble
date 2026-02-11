@@ -12,9 +12,9 @@
 
 ### First-Time Setup
 
-1. Install Python and dependencies:
+1. Install dependencies:
 ```bash
-pip install python git
+pip install -r requirements.txt
 ```
 
 2. Clone and install:
