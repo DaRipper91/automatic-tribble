@@ -5,8 +5,8 @@ Automation features for file organization and management.
 import hashlib
 import shutil
 from pathlib import Path
-from typing import Dict, List, Callable, Optional
-from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+from datetime import datetime
 import os
 
 
