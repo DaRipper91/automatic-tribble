@@ -15,6 +15,7 @@ from textual.screen import Screen
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
+from .screens import ConfirmationScreen
 
 
 class FileManagerApp(App):
@@ -163,12 +164,19 @@ class FileManagerApp(App):
         selected_path = active_panel_widget.get_selected_path()
         
         if selected_path:
-            try:
-                self.file_ops.delete(selected_path)
-                self.notify(f"Deleted {selected_path.name}")
-                active_panel_widget.refresh_view()
-            except Exception as e:
-                self.notify(f"Error deleting: {str(e)}", severity="error")
+            def check_confirm(confirmed: bool) -> None:
+                if confirmed:
+                    try:
+                        self.file_ops.delete(selected_path)
+                        self.notify(f"Deleted {selected_path.name}")
+                        active_panel_widget.refresh_view()
+                    except Exception as e:
+                        self.notify(f"Error deleting: {str(e)}", severity="error")
+
+            self.push_screen(
+                ConfirmationScreen(f"Are you sure you want to delete {selected_path.name}?"),
+                check_confirm
+            )
     
     def action_new_dir(self) -> None:
         """Create a new directory."""
