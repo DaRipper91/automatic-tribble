@@ -3,15 +3,12 @@
 Main application entry point for File Manager
 """
 
-import os
-import sys
 from pathlib import Path
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, DirectoryTree, Static, Label
+from textual.widgets import Header, Footer, Label
 from textual.binding import Binding
 from textual.reactive import reactive
-from textual.screen import Screen
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
