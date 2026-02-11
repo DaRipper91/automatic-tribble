@@ -44,23 +44,16 @@ class ConfirmationScreen(ModalScreen[bool]):
     }
     """
 
-    def __init__(
-        self,
-        message: str,
-        confirm_label: str = "Delete",
-        confirm_variant: str = "error",
-    ):
+    def __init__(self, message: str):
         super().__init__()
         self.message = message
-        self.confirm_label = confirm_label
-        self.confirm_variant = confirm_variant
 
     def compose(self) -> ComposeResult:
         with Container(id="dialog"):
             yield Label(self.message, id="question")
             with Horizontal(id="buttons"):
                 yield Button("Cancel", variant="primary", id="cancel")
-                yield Button(self.confirm_label, variant=self.confirm_variant, id="confirm")
+                yield Button("Delete", variant="error", id="confirm")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":
