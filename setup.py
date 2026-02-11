@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="termux-file-manager",
     version="0.1.0",
-    description="A TUI for Termux that manages files and folders across Termux and Android shared folders",
+    description="A TUI file manager for managing files and folders",
     author="DaRipper91",
     packages=find_packages(where="src"),
     package_dir={"": "src"},
