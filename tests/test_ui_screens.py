@@ -1,7 +1,7 @@
 import pytest
 from textual.app import App, ComposeResult
-from src.file_manager.screens import HelpScreen
-from textual.widgets import Label, Button
+from src.file_manager.screens import HelpScreen, InputScreen
+from textual.widgets import Label, Button, Input
 
 class HeadlessApp(App):
     def compose(self) -> ComposeResult:
@@ -33,4 +33,54 @@ async def test_help_screen_composition():
         await pilot.click("#close-button")
         # After closing, the screen should be popped.
         # app.screen should be the main screen (which is not 'screen')
+        assert app.screen is not screen
+
+@pytest.mark.asyncio
+async def test_input_screen_composition():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = InputScreen("Test Title", "Test Message", initial_value="initial")
+        await app.push_screen(screen)
+
+        # Check for title and message
+        assert str(screen.query_one(".title", Label).render()) == "Test Title"
+        assert str(screen.query_one("#message", Label).render()) == "Test Message"
+
+        # Check for input
+        input_widget = screen.query_one(Input)
+        assert input_widget.value == "initial"
+
+        # Test OK button
+        input_widget.value = "new_value"
+        # We need to capture the result of the screen
+        # Since push_screen is used with a callback usually, we can check dismiss value if we had a way.
+        # But here we just want to see if it dismisses with the right value.
+
+        # We can mock dismiss or just check if it's called.
+        # In textual 0.30+, we can await push_screen if it's not a callback.
+        # But app.py uses callbacks.
+
+        await pilot.click("#ok")
+        assert app.screen is not screen
+
+@pytest.mark.asyncio
+async def test_input_screen_cancel():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = InputScreen("Title", "Msg")
+        await app.push_screen(screen)
+
+        await pilot.click("#cancel")
+        assert app.screen is not screen
+
+@pytest.mark.asyncio
+async def test_input_screen_submit():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = InputScreen("Title", "Msg")
+        await app.push_screen(screen)
+
+        input_widget = screen.query_one(Input)
+        input_widget.value = "submitted"
+        await pilot.press("enter")
         assert app.screen is not screen

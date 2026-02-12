@@ -593,3 +593,76 @@ class HelpScreen(ModalScreen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss()
+
+
+class InputScreen(ModalScreen[str]):
+    """Screen for getting text input from the user."""
+
+    CSS = """
+    InputScreen {
+        align: center middle;
+    }
+
+    #input-dialog {
+        padding: 0 1;
+        width: 60;
+        height: 13;
+        border: thick $background 80%;
+        background: $surface;
+    }
+
+    .title {
+        text-align: center;
+        text-style: bold;
+        margin-top: 1;
+        width: 100%;
+    }
+
+    #message {
+        margin-top: 1;
+        margin-bottom: 1;
+        content-align: center middle;
+        width: 100%;
+    }
+
+    Input {
+        margin-bottom: 1;
+    }
+
+    #buttons {
+        height: auto;
+        width: 100%;
+        align: center bottom;
+        dock: bottom;
+        margin-bottom: 1;
+    }
+
+    Button {
+        margin: 0 1;
+        width: 1fr;
+    }
+    """
+
+    def __init__(self, title: str, message: str, initial_value: str = ""):
+        super().__init__()
+        self.title_text = title
+        self.message = message
+        self.initial_value = initial_value
+
+    def compose(self) -> ComposeResult:
+        with Container(id="input-dialog"):
+            yield Label(self.title_text, classes="title")
+            yield Label(self.message, id="message")
+            yield Input(value=self.initial_value, placeholder="Enter value...")
+            with Horizontal(id="buttons"):
+                yield Button("Cancel", variant="primary", id="cancel")
+                yield Button("OK", variant="success", id="ok")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "ok":
+            self.dismiss(self.query_one(Input).value)
+        else:
+            self.dismiss("")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        self.dismiss(event.value)
