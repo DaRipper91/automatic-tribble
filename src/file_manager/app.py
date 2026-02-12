@@ -12,7 +12,7 @@ from textual.reactive import reactive
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
-from .screens import ConfirmationScreen, HelpScreen
+from .screens import ConfirmationScreen, HelpScreen, InputScreen
 
 
 class FileManagerApp(App):
@@ -177,7 +177,23 @@ class FileManagerApp(App):
     
     def action_new_dir(self) -> None:
         """Create a new directory."""
-        self.notify("New directory creation - feature placeholder")
+        active_panel_widget = self.get_active_panel()
+        current_dir = active_panel_widget.current_dir
+
+        def check_input(name: str | None) -> None:
+            if name:
+                try:
+                    new_dir_path = current_dir / name
+                    self.file_ops.create_directory(new_dir_path)
+                    self.notify(f"Created directory {name}")
+                    active_panel_widget.refresh_view()
+                except Exception as e:
+                    self.notify(f"Error creating directory: {str(e)}", severity="error")
+
+        self.push_screen(
+            InputScreen("Enter new directory name:"),
+            check_input
+        )
     
     def action_rename(self) -> None:
         """Rename selected file/directory."""
