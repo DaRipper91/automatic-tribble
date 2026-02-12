@@ -35,3 +35,8 @@ ENV/
 # OS
 .DS_Store
 Thumbs.db
+
+# AI Context
+repomix-context.xml
+repomix-output.json
+repomix-output.md
