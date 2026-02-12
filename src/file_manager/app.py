@@ -12,7 +12,7 @@ from textual.reactive import reactive
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
-from .screens import ConfirmationScreen, HelpScreen
+from .screens import ConfirmationScreen, HelpScreen, InputScreen
 
 
 class FileManagerApp(App):
@@ -181,7 +181,26 @@ class FileManagerApp(App):
     
     def action_rename(self) -> None:
         """Rename selected file/directory."""
-        self.notify("Rename - feature placeholder")
+        active_panel = self.get_active_panel()
+        selected_path = active_panel.get_selected_path()
+
+        if not selected_path:
+            self.notify("No item selected", severity="warning")
+            return
+
+        def perform_rename(new_name: str) -> None:
+            if new_name and new_name != selected_path.name:
+                try:
+                    self.file_ops.rename(selected_path, new_name)
+                    self.notify(f"Renamed {selected_path.name} to {new_name}")
+                    self.action_refresh()
+                except Exception as e:
+                    self.notify(f"Error renaming: {str(e)}", severity="error")
+
+        self.push_screen(
+            InputScreen("Rename", "Enter new name:", initial_value=selected_path.name),
+            perform_rename
+        )
     
     def action_refresh(self) -> None:
         """Refresh both panels."""

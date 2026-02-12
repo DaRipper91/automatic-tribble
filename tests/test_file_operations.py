@@ -176,3 +176,54 @@ class TestFileOperations:
 
         with pytest.raises(NotADirectoryError):
             file_ops.move(source_file, invalid_dest)
+
+    def test_rename_file_success(self, file_ops, temp_structure):
+        source_file = temp_structure["file1"]
+        new_name = "renamed_file.txt"
+
+        file_ops.rename(source_file, new_name)
+
+        new_path = source_file.parent / new_name
+        assert new_path.exists()
+        assert new_path.read_text() == "content1"
+        assert not source_file.exists()
+
+    def test_rename_directory_success(self, file_ops, temp_structure):
+        source_dir = temp_structure["subdir"]
+        new_name = "renamed_dir"
+
+        file_ops.rename(source_dir, new_name)
+
+        new_path = source_dir.parent / new_name
+        assert new_path.exists()
+        assert new_path.is_dir()
+        assert (new_path / "file2.txt").exists()
+        assert not source_dir.exists()
+
+    def test_rename_source_not_found(self, file_ops, temp_structure):
+        missing_source = temp_structure["source"] / "missing.txt"
+
+        with pytest.raises(FileNotFoundError):
+            file_ops.rename(missing_source, "new_name.txt")
+
+    def test_rename_target_exists_error(self, file_ops, temp_structure):
+        source_file = temp_structure["file1"]
+        # Create a file that already has the target name
+        target_name = "already_exists.txt"
+        target_path = source_file.parent / target_name
+        target_path.write_text("other content")
+
+        with pytest.raises(FileExistsError):
+            file_ops.rename(source_file, target_name)
+
+        assert source_file.exists()
+        assert target_path.read_text() == "other content"
+
+    def test_rename_invalid_name_error(self, file_ops, temp_structure):
+        source_file = temp_structure["file1"]
+
+        with pytest.raises(ValueError, match="Invalid new name"):
+            file_ops.rename(source_file, "path/separator.txt")
+
+        with pytest.raises(ValueError, match="Invalid new name"):
+            file_ops.rename(source_file, "..")

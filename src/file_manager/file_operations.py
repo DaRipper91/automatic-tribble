@@ -107,6 +107,10 @@ class FileOperations:
             raise ValueError("Invalid new name: path separators or reserved names not allowed")
 
         new_path = old_path.parent / new_name
+
+        if new_path.exists():
+            raise FileExistsError(f"Target already exists: {new_path}")
+
         old_path.rename(new_path)
     
     def get_size(self, path: Union[str, Path]) -> int:
