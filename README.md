@@ -1,26 +1,34 @@
-# File Manager (TFM)
+# 🚀 TFM: The Future Manager
 
-A powerful Text User Interface (TUI) file manager that helps you manage files and folders efficiently.
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![TUI](https://img.shields.io/badge/TUI-Textual-green)
+![AI Powered](https://img.shields.io/badge/AI-Gemini-purple)
 
-## Features
+**The Next-Gen File Manager for your Terminal.**
 
-- **Dual-Pane Interface**: Navigate two directories simultaneously for easy file operations
-- **File Operations**: Copy, move, delete, and manage files and directories
-- **Keyboard-Driven**: Efficient keyboard shortcuts for all operations
-- **Modern TUI**: Built with Textual for a responsive and intuitive interface
-- **Automation Tools**: Command-line utilities for batch operations
-  - Organize files by type or date
-  - Search files by name, content, or size
-  - Find and manage duplicate files
-  - Clean up old files
-  - Batch rename operations
+TFM combines a robust Dual-Pane File Manager with powerful AI Automation. Whether you need precise control or intelligent batch operations, TFM adapts to your workflow.
 
-## Installation
+## ✨ Key Features
 
-### Requirements
-- Python 3.8 or higher
+### 🤖 AI Mode (New!)
+Harness the power of Google Gemini directly in your terminal.
+- **Natural Language Commands**: "Organize my downloads by date", "Find all PDF files"
+- **Intelligent Automation**: Let AI generate the complex shell commands for you.
+- **Chat Integration**: Ask questions about your files or get help.
 
-### Install from source
+### 🖥️ User Mode
+A flexible, keyboard-driven interface.
+- **Dual Pane**: Classic Norton Commander style for efficient file transfers.
+- **Single Pane**: Focused view with **Dynamic Split**—automatically opens a second panel when you Copy or Move files!
+- **Fast & Responsive**: Built with Textual for a modern, lag-free experience.
+
+## 📦 Installation
+
+### Prerequisites
+- Python 3.8+
+- [Gemini CLI](https://geminicli.com) (Optional, for AI features)
+
+### Quick Start
 
 ```bash
 # Clone the repository
@@ -30,142 +38,47 @@ cd automatic-tribble
 # Install dependencies
 pip install -r requirements.txt
 
-# Install the package
-pip install -e .
-```
-
-### Quick Run (without installation)
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run directly
+# Run TFM
 python run.py
 ```
 
-## Usage
+### 🧠 Setting up AI Mode
+To unlock the full potential of AI Mode, install the Gemini CLI:
 
-### Start the file manager
-
-**Interactive TUI:**
+**For Termux / Android:**
 ```bash
-tfm
+npm install -g @mmmbuto/gemini-cli-termux
 ```
 
-Or if running without installation:
+**For Desktop / Server:**
 ```bash
-python run.py
+npm install -g @google/gemini-cli
 ```
+*Ensure `gemini` is in your PATH and authenticated.*
 
-**Automation CLI:**
-```bash
-tfm-auto --help
-```
-
-Or without installation:
-```bash
-python src/file_manager/cli.py --help
-```
-
-**Demo script:**
-```bash
-python demo.py
-```
-
-### Keyboard Shortcuts
+## 🎮 Controls
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Switch between left and right panels |
-| `Arrow Keys` | Navigate files and directories |
-| `Enter` | Enter directory / Select file |
-| `c` | Copy selected file/directory to other panel |
-| `m` | Move selected file/directory to other panel |
-| `d` | Delete selected file/directory |
-| `n` | Create new directory |
-| `r` | Rename selected file/directory |
-| `Ctrl+R` | Refresh both panels |
-| `h` | Show help |
-| `q` | Quit application |
+| `Tab` | Switch Panel |
+| `C` | Copy (Dynamic Split in Single Mode!) |
+| `M` | Move (Dynamic Split in Single Mode!) |
+| `D` | Delete |
+| `N` | New Directory |
+| `R` | Rename |
+| `Q` | Quit |
 
-### Automation CLI Commands
+## 🛠️ Architecture
 
-**Organize files by type:**
-```bash
-tfm-auto organize --source ~/Downloads --target ~/Organized --by-type
-```
+TFM is built with modularity in mind:
+- **`app.py`**: The core TUI application.
+- **`screens.py`**: Modular screens (Launcher, Config, AI Console).
+- **`ai_utils.py`**: Bridge to the Gemini CLI.
+- **`file_operations.py`**: Thread-safe file management.
 
-**Organize files by date:**
-```bash
-tfm-auto organize --source ~/Downloads --target ~/Organized --by-date
-```
+## 🤝 Contributing
 
-**Search for files:**
-```bash
-tfm-auto search --dir ~/Documents --name "*.pdf"
-tfm-auto search --dir ~/Documents --content "important"
-```
+Join us in building the future of terminal file management! PRs are welcome.
 
-**Find duplicate files:**
-```bash
-tfm-auto duplicates --dir ~/Downloads
-```
-
-**Clean up old files:**
-```bash
-tfm-auto cleanup --dir ~/Downloads --days 30 --dry-run
-```
-
-**Batch rename files:**
-```bash
-tfm-auto rename --dir ~/Photos --pattern "IMG_" --replacement "Photo_"
-```
-
-For detailed usage instructions and examples, see [USAGE.md](USAGE.md).
-
-## Architecture
-
-The file manager consists of:
-
-- **app.py**: Main application with dual-pane layout and keyboard bindings
-- **file_panel.py**: Individual file panel widget with directory tree
-- **file_operations.py**: Core file operation functions (copy, move, delete, etc.)
-- **search.py**: File search functionality (by name, content, size)
-- **automation.py**: Automation tools for file organization and batch operations
-- **cli.py**: Command-line interface for automation features
-
-## Default Locations
-
-- **Left Panel**: Home directory (`~`)
-- **Right Panel**: Home directory (`~`)
-
-## Development
-
-### Project Structure
-
-```
-automatic-tribble/
-├── src/
-│   └── file_manager/
-│       ├── __init__.py
-│       ├── app.py              # Main TUI application
-│       ├── file_panel.py       # File panel widget
-│       ├── file_operations.py  # File operations
-│       ├── search.py           # Search functionality
-│       ├── automation.py       # Automation features
-│       └── cli.py              # CLI for automation
-├── requirements.txt
-├── setup.py
-├── run.py                      # Quick run script
-├── demo.py                     # Feature demonstration
-└── README.md
-```
-
-## License
-
-MIT License
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. 
+---
+*Built with ❤️ and Python.*

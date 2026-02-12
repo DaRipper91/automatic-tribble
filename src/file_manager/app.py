@@ -4,6 +4,7 @@ Main application entry point for File Manager
 """
 
 from pathlib import Path
+from typing import Optional, Dict, Any
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical
 from textual.widgets import Header, Footer, Label
@@ -12,7 +13,8 @@ from textual.reactive import reactive
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
-from .screens import ConfirmationScreen, HelpScreen
+from .screens import ConfirmationScreen, HelpScreen, StartupScreen, LauncherScreen, ProgressScreen
+from .utils import find_gemini_executable
 
 
 class FileManagerApp(App):
@@ -41,6 +43,15 @@ class FileManagerApp(App):
         border: solid $accent;
     }
     
+    /* Single Panel Mode CSS */
+    .single-mode #right-panel {
+        display: none;
+    }
+
+    .single-mode #left-panel {
+        width: 100%;
+    }
+
     #status-bar {
         height: 3;
         background: $panel;
@@ -63,26 +74,38 @@ class FileManagerApp(App):
         Binding("r", "rename", "Rename"),
         Binding("h", "toggle_help", "Help"),
         Binding("ctrl+r", "refresh", "Refresh"),
+        Binding("escape", "close_panel", "Close Panel"),
     ]
     
     TITLE = "File Manager"
     
     active_panel = reactive(0)  # 0 for left, 1 for right
+    layout_mode = reactive("dual") # "dual" or "single"
     
-    def __init__(self):
+    def __init__(self, mode: str = "dual"):
         super().__init__()
         self.file_ops = FileOperations()
+        self.layout_mode = mode
         
         # Default paths - both panels start at home directory
         self.left_path = Path.home()
         self.right_path = Path.home()
         
+        self.is_temporary_dual = False
+        self.gemini_path: Optional[str] = None
+
+        # Store pending operation (type, source_path)
+        self.pending_operation: Optional[Dict[str, Any]] = None
+
     def compose(self) -> ComposeResult:
         """Create the layout."""
         yield Header()
         
         with Container(id="main-container"):
-            with Horizontal(id="panels-container"):
+            # Add class for single mode if needed
+            classes = "single-mode" if self.layout_mode == "single" else ""
+
+            with Horizontal(id="panels-container", classes=classes):
                 yield FilePanel(
                     str(self.left_path),
                     id="left-panel",
@@ -105,9 +128,45 @@ class FileManagerApp(App):
                 )
         
         yield Footer()
-    
+
+    def on_mount(self) -> None:
+        """Called when app is mounted."""
+        self.gemini_path = find_gemini_executable()
+        if self.gemini_path:
+            self.notify(f"AI Mode enabled (Gemini found at {self.gemini_path})")
+
+        # Ensure layout matches initial mode
+        self._update_layout()
+
+        # Show Startup Screen then Launcher
+        # Push Launcher first, then Startup so Startup is on top
+        self.push_screen(LauncherScreen())
+        self.push_screen(StartupScreen())
+
+    def watch_layout_mode(self, mode: str) -> None:
+        """React to layout mode changes."""
+        self._update_layout()
+
+    def _update_layout(self) -> None:
+        """Update CSS classes based on layout mode."""
+        try:
+            container = self.query_one("#panels-container")
+            if self.layout_mode == "single":
+                container.add_class("single-mode")
+                # Ensure left panel is active and focused
+                self.active_panel = 0
+                self.query_one("#left-panel").add_class("active")
+                self.query_one("#right-panel").remove_class("active")
+            else:
+                container.remove_class("single-mode")
+        except Exception:
+            pass # Widget might not be mounted yet
+
     def action_switch_panel(self) -> None:
         """Switch between left and right panels."""
+        if self.layout_mode == "single":
+            return # No switching in single mode
+
         self.active_panel = 1 - self.active_panel
         
         left_panel = self.query_one("#left-panel", FilePanel)
@@ -122,8 +181,62 @@ class FileManagerApp(App):
             left_panel.remove_class("active")
             right_panel.focus()
     
+    def action_close_panel(self) -> None:
+        """Close the second panel if in temporary dual mode."""
+        if self.is_temporary_dual:
+            self.layout_mode = "single"
+            self.is_temporary_dual = False
+            self.pending_operation = None
+            self.notify("Cancelled operation. Returned to Single Panel Mode")
+
     def action_copy(self) -> None:
         """Copy selected file/directory."""
+
+        # Check for pending copy operation
+        if self.pending_operation and self.pending_operation["type"] == "copy":
+            source_path = self.pending_operation["source"]
+            target_panel = self.get_active_panel() # We are now in the target panel
+            target_dir = target_panel.current_dir
+
+            async def run_copy():
+                progress = ProgressScreen(f"Copying {source_path.name}...")
+                self.push_screen(progress)
+                try:
+                    await self.run_in_thread(self.file_ops.copy, source_path, target_dir)
+                    self.notify(f"Copied {source_path.name} to {target_dir}")
+                    target_panel.refresh_view()
+
+                    # Cleanup
+                    self.pending_operation = None
+                    if self.is_temporary_dual:
+                        self.layout_mode = "single"
+                        self.is_temporary_dual = False
+                        self.notify("Copy complete.")
+                except Exception as e:
+                    self.notify(f"Error copying: {str(e)}", severity="error")
+                finally:
+                    progress.dismiss()
+
+            self.run_worker(run_copy(), exclusive=True)
+            return
+
+        # Handle Single Mode transition
+        if self.layout_mode == "single":
+            active_panel_widget = self.get_active_panel()
+            selected_path = active_panel_widget.get_selected_path()
+            if not selected_path:
+                self.notify("No file selected", severity="error")
+                return
+
+            self.pending_operation = {"type": "copy", "source": selected_path}
+            self.layout_mode = "dual"
+            self.is_temporary_dual = True
+            # Switch focus to the right panel (destination)
+            self.action_switch_panel()
+            self.notify(f"Copying {selected_path.name}. Select destination and press 'C' to confirm.")
+            return
+
+        # Normal Dual Mode Copy
         active_panel_widget = self.get_active_panel()
         selected_path = active_panel_widget.get_selected_path()
         
@@ -131,15 +244,70 @@ class FileManagerApp(App):
             target_panel = self.get_inactive_panel()
             target_dir = target_panel.current_dir
             
-            try:
-                self.file_ops.copy(selected_path, target_dir)
-                self.notify(f"Copied {selected_path.name} to {target_dir}")
-                target_panel.refresh_view()
-            except Exception as e:
-                self.notify(f"Error copying: {str(e)}", severity="error")
+            async def run_normal_copy():
+                progress = ProgressScreen(f"Copying {selected_path.name}...")
+                self.push_screen(progress)
+                try:
+                    await self.run_in_thread(self.file_ops.copy, selected_path, target_dir)
+                    self.notify(f"Copied {selected_path.name} to {target_dir}")
+                    target_panel.refresh_view()
+                except Exception as e:
+                    self.notify(f"Error copying: {str(e)}", severity="error")
+                finally:
+                    progress.dismiss()
+
+            self.run_worker(run_normal_copy(), exclusive=True)
     
     def action_move(self) -> None:
         """Move selected file/directory."""
+
+        # Check for pending move operation
+        if self.pending_operation and self.pending_operation["type"] == "move":
+            source_path = self.pending_operation["source"]
+            target_panel = self.get_active_panel()
+            target_dir = target_panel.current_dir
+
+            async def run_move():
+                progress = ProgressScreen(f"Moving {source_path.name}...")
+                self.push_screen(progress)
+                try:
+                    await self.run_in_thread(self.file_ops.move, source_path, target_dir)
+                    self.notify(f"Moved {source_path.name} to {target_dir}")
+                    target_panel.refresh_view()
+                    # Refresh source panel (inactive)
+                    self.get_inactive_panel().refresh_view()
+
+                    # Cleanup
+                    self.pending_operation = None
+                    if self.is_temporary_dual:
+                        self.layout_mode = "single"
+                        self.is_temporary_dual = False
+                        self.notify("Move complete.")
+                except Exception as e:
+                    self.notify(f"Error moving: {str(e)}", severity="error")
+                finally:
+                    progress.dismiss()
+
+            self.run_worker(run_move(), exclusive=True)
+            return
+
+        # Handle Single Mode transition
+        if self.layout_mode == "single":
+            active_panel_widget = self.get_active_panel()
+            selected_path = active_panel_widget.get_selected_path()
+            if not selected_path:
+                self.notify("No file selected", severity="error")
+                return
+
+            self.pending_operation = {"type": "move", "source": selected_path}
+            self.layout_mode = "dual"
+            self.is_temporary_dual = True
+            # Switch focus to the right panel
+            self.action_switch_panel()
+            self.notify(f"Moving {selected_path.name}. Select destination and press 'M' to confirm.")
+            return
+
+        # Normal Dual Mode Move
         active_panel_widget = self.get_active_panel()
         selected_path = active_panel_widget.get_selected_path()
         
@@ -147,13 +315,20 @@ class FileManagerApp(App):
             target_panel = self.get_inactive_panel()
             target_dir = target_panel.current_dir
             
-            try:
-                self.file_ops.move(selected_path, target_dir)
-                self.notify(f"Moved {selected_path.name} to {target_dir}")
-                active_panel_widget.refresh_view()
-                target_panel.refresh_view()
-            except Exception as e:
-                self.notify(f"Error moving: {str(e)}", severity="error")
+            async def run_normal_move():
+                progress = ProgressScreen(f"Moving {selected_path.name}...")
+                self.push_screen(progress)
+                try:
+                    await self.run_in_thread(self.file_ops.move, selected_path, target_dir)
+                    self.notify(f"Moved {selected_path.name} to {target_dir}")
+                    active_panel_widget.refresh_view()
+                    target_panel.refresh_view()
+                except Exception as e:
+                    self.notify(f"Error moving: {str(e)}", severity="error")
+                finally:
+                    progress.dismiss()
+
+            self.run_worker(run_normal_move(), exclusive=True)
     
     def action_delete(self) -> None:
         """Delete selected file/directory."""
@@ -163,12 +338,19 @@ class FileManagerApp(App):
         if selected_path:
             def check_confirm(confirmed: bool) -> None:
                 if confirmed:
-                    try:
-                        self.file_ops.delete(selected_path)
-                        self.notify(f"Deleted {selected_path.name}")
-                        active_panel_widget.refresh_view()
-                    except Exception as e:
-                        self.notify(f"Error deleting: {str(e)}", severity="error")
+                    async def run_delete():
+                        progress = ProgressScreen(f"Deleting {selected_path.name}...")
+                        self.push_screen(progress)
+                        try:
+                            await self.run_in_thread(self.file_ops.delete, selected_path)
+                            self.notify(f"Deleted {selected_path.name}")
+                            active_panel_widget.refresh_view()
+                        except Exception as e:
+                            self.notify(f"Error deleting: {str(e)}", severity="error")
+                        finally:
+                            progress.dismiss()
+
+                    self.run_worker(run_delete(), exclusive=True)
 
             self.push_screen(
                 ConfirmationScreen(f"Are you sure you want to delete {selected_path.name}?"),
