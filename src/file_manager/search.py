@@ -4,7 +4,7 @@ Search functionality for finding files and directories.
 
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 import fnmatch
 
 
@@ -167,41 +167,46 @@ class FileSearcher:
         
         try:
             if recursive:
-                for root, _, files in os.walk(directory):
-                    root_path = Path(root)
-                    
-                    for file_name in files:
-                        file_path = root_path / file_name
-                        try:
-                            size = file_path.stat().st_size
-                            
-                            if min_size is not None and size < min_size:
-                                continue
-                            if max_size is not None and size > max_size:
-                                continue
-                            
-                            results.append(file_path)
-                        except OSError:
-                            continue
+                entries = self._scan_recursive(directory)
             else:
-                for item in directory.iterdir():
-                    if item.is_file():
-                        try:
-                            size = item.stat().st_size
-                            
-                            if min_size is not None and size < min_size:
-                                continue
-                            if max_size is not None and size > max_size:
-                                continue
-                            
-                            results.append(item)
-                        except OSError:
-                            continue
+                # Non-recursive: just top level
+                try:
+                    entries = (e for e in os.scandir(directory) if e.is_file())
+                except OSError:
+                    entries = []
+
+            for entry in entries:
+                try:
+                    # DirEntry.stat() is cached on Windows and faster than Path.stat() generally
+                    # Also avoids creating Path object until we know it matches
+                    size = entry.stat().st_size
+
+                    if min_size is not None and size < min_size:
+                        continue
+                    if max_size is not None and size > max_size:
+                        continue
+
+                    results.append(Path(entry.path))
+                except OSError:
+                    continue
+
         except PermissionError:
             pass
         
         self.results = results
         return results
+
+    def _scan_recursive(self, directory: Union[Path, str]):
+        """Recursively scan directory using os.scandir."""
+        try:
+            with os.scandir(directory) as it:
+                for entry in it:
+                    if entry.is_dir(follow_symlinks=False):
+                        yield from self._scan_recursive(entry.path)
+                    elif entry.is_file(follow_symlinks=True):
+                        yield entry
+        except (PermissionError, OSError):
+            pass
     
     @staticmethod
     def _is_text_file(file_path: Path) -> bool:
