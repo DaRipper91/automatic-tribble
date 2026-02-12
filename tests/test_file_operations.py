@@ -176,3 +176,63 @@ class TestFileOperations:
 
         with pytest.raises(NotADirectoryError):
             file_ops.move(source_file, invalid_dest)
+
+    def test_delete_file_success(self, file_ops, temp_structure):
+        path = temp_structure["file1"]
+        file_ops.delete(path)
+        assert not path.exists()
+
+    def test_delete_directory_success(self, file_ops, temp_structure):
+        path = temp_structure["subdir"]
+        file_ops.delete(path)
+        assert not path.exists()
+
+    def test_delete_not_found(self, file_ops, temp_structure):
+        path = temp_structure["root"] / "nonexistent.txt"
+        with pytest.raises(FileNotFoundError):
+            file_ops.delete(path)
+
+    def test_create_directory_success(self, file_ops, temp_structure):
+        path = temp_structure["root"] / "new_dir"
+        file_ops.create_directory(path)
+        assert path.is_dir()
+
+    def test_create_directory_exists(self, file_ops, temp_structure):
+        path = temp_structure["subdir"]
+        with pytest.raises(FileExistsError):
+            file_ops.create_directory(path)
+
+    def test_rename_success(self, file_ops, temp_structure):
+        path = temp_structure["file1"]
+        file_ops.rename(path, "new.txt")
+        new_path = temp_structure["source"] / "new.txt"
+        assert new_path.exists()
+        assert not path.exists()
+
+    def test_rename_directory_success(self, file_ops, temp_structure):
+        dir_path = temp_structure["subdir"]
+        file_ops.rename(dir_path, "new_dir")
+        new_dir = temp_structure["source"] / "new_dir"
+        assert new_dir.is_dir()
+        assert not dir_path.exists()
+        assert (new_dir / "file2.txt").exists()
+
+    def test_rename_not_found(self, file_ops, temp_structure):
+        path = temp_structure["root"] / "nonexistent.txt"
+        with pytest.raises(FileNotFoundError):
+            file_ops.rename(path, "new.txt")
+
+    def test_get_size_file(self, file_ops, temp_structure):
+        path = temp_structure["file1"]
+        assert file_ops.get_size(path) == len("content1")
+
+    def test_get_size_directory(self, file_ops, temp_structure):
+        # subdir contains file2.txt with "content2" (8 bytes)
+        path = temp_structure["subdir"]
+        assert file_ops.get_size(path) == 8
+
+    def test_format_size(self, file_ops):
+        assert file_ops.format_size(500) == "500.0 B"
+        assert file_ops.format_size(1024) == "1.0 KB"
+        assert file_ops.format_size(1024 * 1024) == "1.0 MB"
+        assert file_ops.format_size(1024 * 1024 * 1024) == "1.0 GB"
