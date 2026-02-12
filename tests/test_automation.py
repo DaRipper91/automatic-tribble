@@ -133,5 +133,76 @@ class TestBatchRename(unittest.TestCase):
         self.assertEqual(len(renamed_files), 1)
         self.assertIn(expected_file, renamed_files)
 
+
+class TestOrganizeByType(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = Path("test_organize_by_type")
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+        self.test_dir.mkdir()
+
+        self.source_dir = self.test_dir / "source"
+        self.target_dir = self.test_dir / "target"
+        self.source_dir.mkdir()
+        self.target_dir.mkdir()
+
+        self.organizer = FileOrganizer()
+
+    def tearDown(self):
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+
+    def test_organize_by_type_basic(self):
+        # Create some test files
+        (self.source_dir / "test.jpg").touch()
+        (self.source_dir / "test.mp4").touch()
+        (self.source_dir / "test.txt").touch()
+        (self.source_dir / "test.unknown").touch()
+
+        # Organize
+        result = self.organizer.organize_by_type(
+            source_dir=self.source_dir,
+            target_dir=self.target_dir,
+            move=False
+        )
+
+        # Verify results
+        self.assertIn('images', result)
+        self.assertIn('videos', result)
+        self.assertIn('documents', result)
+        self.assertNotIn('data', result) # No data files created
+
+        self.assertTrue((self.target_dir / "images" / "test.jpg").exists())
+        self.assertTrue((self.target_dir / "videos" / "test.mp4").exists())
+        self.assertTrue((self.target_dir / "documents" / "test.txt").exists())
+        self.assertFalse((self.target_dir / "test.unknown").exists())
+
+        # Original files should still exist because move=False
+        self.assertTrue((self.source_dir / "test.jpg").exists())
+
+    def test_organize_by_type_custom_categories(self):
+        # Create some test files
+        (self.source_dir / "test.custom").touch()
+
+        custom_categories = {
+            'special': ['.custom']
+        }
+
+        # Organize
+        result = self.organizer.organize_by_type(
+            source_dir=self.source_dir,
+            target_dir=self.target_dir,
+            categories=custom_categories,
+            move=True
+        )
+
+        # Verify results
+        self.assertIn('special', result)
+        self.assertTrue((self.target_dir / "special" / "test.custom").exists())
+
+        # Original file should be gone because move=True
+        self.assertFalse((self.source_dir / "test.custom").exists())
+
+
 if __name__ == '__main__':
     unittest.main()
