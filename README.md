@@ -82,3 +82,6 @@ Join us in building the future of terminal file management! PRs are welcome.
 
 ---
 *Built with ❤️ and Python.*
+
+## 🤖 AI-Ready
+This repo adheres to the Repomix standard. Run `repomix` to pack the codebase for LLM context.

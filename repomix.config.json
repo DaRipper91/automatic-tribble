@@ -1,0 +1,17 @@
+{
+  "output": {
+    "style": "xml",
+    "filePath": "repomix-context.xml",
+    "removeComments": false,
+    "removeEmptyLines": true
+  },
+  "ignore": {
+    "useGitignore": true,
+    "customPatterns": [
+      ".git/**",
+      "node_modules/**",
+      "dist/**",
+      "build/**"
+    ]
+  }
+}
