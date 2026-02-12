@@ -2,13 +2,11 @@
 File panel widget for displaying and navigating files.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
-from textual.widgets import DirectoryTree, Static, ListItem, ListView
+from textual.widgets import DirectoryTree, Static
 from textual.containers import Vertical, Container
 from textual.reactive import reactive
-from rich.text import Text
 
 
 class FilePanel(Container):

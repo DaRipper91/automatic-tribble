@@ -1,4 +1,10 @@
-from setuptools import setup, find_packages
+try:
+    from setuptools import setup, find_packages
+except ImportError:
+    import sys
+    print("Error: setuptools is not installed.", file=sys.stderr)
+    print("Please install it using 'pip install setuptools' or your system package manager.", file=sys.stderr)
+    sys.exit(1)
 
 setup(
     name="termux-file-manager",
