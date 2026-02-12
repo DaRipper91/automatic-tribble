@@ -30,6 +30,13 @@ class FileOrganizer:
         'data': ['.json', '.xml', '.yaml', '.yml', '.sql', '.db'],
     }
     
+    # Pre-computed mapping for default categories to enable O(1) lookup
+    _DEFAULT_EXTENSION_MAP = {
+        ext.lower(): cat
+        for cat, exts in FILE_CATEGORIES.items()
+        for ext in exts
+    }
+
     def __init__(self):
         self.organized_files: Dict[str, List[Path]] = {}
     
@@ -53,7 +60,9 @@ class FileOrganizer:
             Dictionary mapping categories to lists of organized files
         """
         if categories is None:
-            categories = self.FILE_CATEGORIES
+            extension_map = self._DEFAULT_EXTENSION_MAP
+        else:
+            extension_map = self._build_extension_map(categories)
         
         organized = {}
         target_dir.mkdir(parents=True, exist_ok=True)
@@ -63,7 +72,7 @@ class FileOrganizer:
                 continue
             
             # Find matching category
-            category = self._get_file_category(file_path, categories)
+            category = self._get_file_category(file_path, extension_map)
             
             if category:
                 # Create category directory
@@ -300,27 +309,39 @@ class FileOrganizer:
         return renamed_files
     
     @staticmethod
+    def _build_extension_map(categories: Dict[str, List[str]]) -> Dict[str, str]:
+        """
+        Build an inverted mapping from extensions to categories.
+
+        Args:
+            categories: Dictionary of categories and their extensions
+
+        Returns:
+            Dictionary mapping extensions to category names
+        """
+        extension_map = {}
+        for category, extensions in categories.items():
+            for ext in extensions:
+                extension_map[ext.lower()] = category
+        return extension_map
+
+    @staticmethod
     def _get_file_category(
         file_path: Path,
-        categories: Dict[str, List[str]]
+        extension_map: Dict[str, str]
     ) -> Optional[str]:
         """
         Determine the category of a file based on its extension.
         
         Args:
             file_path: Path to the file
-            categories: Dictionary of categories and their extensions
+            extension_map: Mapping of extensions to categories
             
         Returns:
             Category name or None if no match
         """
         extension = file_path.suffix.lower()
-        
-        for category, extensions in categories.items():
-            if extension in extensions:
-                return category
-        
-        return None
+        return extension_map.get(extension)
     
     @staticmethod
     def _compute_file_hash(file_path: Path, chunk_size: int = 8192) -> str:
