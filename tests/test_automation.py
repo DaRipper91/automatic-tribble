@@ -204,5 +204,90 @@ class TestOrganizeByType(unittest.TestCase):
         self.assertFalse((self.source_dir / "test.custom").exists())
 
 
+class TestFindDuplicates(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = Path("test_find_duplicates")
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+        self.test_dir.mkdir()
+        self.organizer = FileOrganizer()
+
+    def tearDown(self):
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+
+    def test_find_duplicates_basic(self):
+        # Create original file
+        file1 = self.test_dir / "original.txt"
+        with open(file1, "w") as f:
+            f.write("content")
+
+        # Create duplicate
+        file2 = self.test_dir / "duplicate.txt"
+        with open(file2, "w") as f:
+            f.write("content")
+
+        # Create different file
+        file3 = self.test_dir / "different.txt"
+        with open(file3, "w") as f:
+            f.write("different content")
+
+        duplicates = self.organizer.find_duplicates(self.test_dir)
+
+        self.assertEqual(len(duplicates), 1)
+        # Verify the duplicate set contains both files
+        for files in duplicates.values():
+            self.assertEqual(len(files), 2)
+            self.assertTrue(any(f.name == "original.txt" for f in files))
+            self.assertTrue(any(f.name == "duplicate.txt" for f in files))
+
+    def test_find_duplicates_recursive(self):
+        # Create file in root
+        file1 = self.test_dir / "root.txt"
+        with open(file1, "w") as f:
+            f.write("recursive content")
+
+        # Create subdirectory with duplicate
+        subdir = self.test_dir / "subdir"
+        subdir.mkdir()
+        file2 = subdir / "nested.txt"
+        with open(file2, "w") as f:
+            f.write("recursive content")
+
+        duplicates = self.organizer.find_duplicates(self.test_dir, recursive=True)
+
+        self.assertEqual(len(duplicates), 1)
+        for files in duplicates.values():
+            self.assertEqual(len(files), 2)
+
+    def test_find_duplicates_no_recursive(self):
+        # Create file in root
+        file1 = self.test_dir / "root.txt"
+        with open(file1, "w") as f:
+            f.write("recursive content")
+
+        # Create subdirectory with duplicate
+        subdir = self.test_dir / "subdir"
+        subdir.mkdir()
+        file2 = subdir / "nested.txt"
+        with open(file2, "w") as f:
+            f.write("recursive content")
+
+        duplicates = self.organizer.find_duplicates(self.test_dir, recursive=False)
+
+        self.assertEqual(len(duplicates), 0)
+
+    def test_no_duplicates(self):
+        file1 = self.test_dir / "file1.txt"
+        with open(file1, "w") as f:
+            f.write("content 1")
+        file2 = self.test_dir / "file2.txt"
+        with open(file2, "w") as f:
+            f.write("content 2")
+
+        duplicates = self.organizer.find_duplicates(self.test_dir)
+        self.assertEqual(len(duplicates), 0)
+
+
 if __name__ == '__main__':
     unittest.main()
