@@ -23,7 +23,7 @@ Comprehensive, task-focused guidance for using the Terminal File Manager (TFM) i
 ## Overview
 TFM is a dual-pane, keyboard-first file manager with optional AI assistance. It provides:
 - **User Mode**: Fast navigation, side-by-side panels, copy/move/delete, and refresh with Textual-powered visuals.
-- **AI Mode**: Natural-language prompts and quick actions powered by the Gemini integration mock to plan and execute automation.
+- **AI Mode**: Natural-language prompts and quick actions powered by the built-in Gemini mock integration (works without network) with optional handoff to a real Gemini CLI when configured.
 - **Automation CLI**: Scriptable batch operations (`tfm-auto`) for organizing, searching, cleaning, and renaming files.
 
 ## System Requirements
@@ -100,7 +100,7 @@ TFM is a dual-pane, keyboard-first file manager with optional AI assistance. It 
 
 ## AI Mode in Depth
 1. **Prerequisites**
-   - Optional: Install Gemini CLI (`npm install -g @google/gemini-cli` or `@mmmbuto/gemini-cli-termux` for Termux) and authenticate.
+   - Optional: Install Gemini CLI (`npm install -g @google/gemini-cli` or `@mmmbuto/gemini-cli-termux` for Termux) and authenticate with `gemini login`.
 2. **Target Directory**
    - Enter the folder where actions should run. It must exist; otherwise, the log shows an error.
 3. **Quick Actions**
@@ -172,4 +172,3 @@ Use `tfm-auto --help` for live details. Commands and key options:
 - Quickstart and high-level overview: [README.md](README.md)
 - Task-focused walkthroughs: [USAGE.md](USAGE.md)
 - Source entry points: `run.py` (TUI) and `src/file_manager/cli.py` (automation CLI)
-
