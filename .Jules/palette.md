@@ -5,3 +5,7 @@
 ## 2025-05-21 - [TUI Accessibility: Modal Help]
 **Learning:** In keyboard-centric TUIs (like Textual), rely on persistent modals (`ModalScreen`) for help/shortcuts instead of transient toast notifications (`self.notify`). Toasts disappear too quickly for users trying to learn new keybindings, creating a frustrating experience.
 **Action:** Replace help notifications with a dedicated `HelpScreen` that users can close at their own pace.
+
+## 2025-05-21 - [TUI Accessibility: Modal Escape Binding]
+**Learning:** Textual's `ModalScreen` does not automatically bind the `Escape` key to dismiss the modal. This breaks user expectation for modal dialogs.
+**Action:** Explicitly add `BINDINGS = [Binding("escape", "dismiss", "Close")]` and an `action_dismiss` method (calling `self.dismiss()`) to all `ModalScreen` implementations.

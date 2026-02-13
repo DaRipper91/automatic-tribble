@@ -12,7 +12,7 @@ from textual.screen import Screen
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
-from .screens import ConfirmationScreen
+from .screens import ConfirmationScreen, HelpScreen
 
 
 class UserModeScreen(Screen):
@@ -200,7 +200,7 @@ class UserModeScreen(Screen):
 
     def action_toggle_help(self) -> None:
         """Toggle help display."""
-        self.notify("Help: Use arrow keys to navigate, Tab to switch panels, shortcuts shown in footer")
+        self.app.push_screen(HelpScreen())
 
     def get_active_panel(self) -> FilePanel:
         """Get the currently active file panel."""
