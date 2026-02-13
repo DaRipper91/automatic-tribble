@@ -8,6 +8,8 @@
 
 TFM combines a robust Dual-Pane File Manager with powerful AI Automation. Whether you need precise control or intelligent batch operations, TFM adapts to your workflow.
 
+📘 **Full User Manual:** See [USER_MANUAL.md](USER_MANUAL.md) for a deep, sectioned guide to installation, usage, automation, and troubleshooting.
+
 ## ✨ Key Features
 
 ### 🤖 AI Mode (New!)
@@ -47,7 +49,7 @@ To unlock the full potential of AI Mode, install the Gemini CLI:
 
 **For Termux / Android:**
 ```bash
-npm install -g @mmmbuto/gemini-cli-termux
+npm install -g @mmbuto/gemini-cli-termux
 ```
 
 **For Desktop / Server:**
