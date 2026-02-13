@@ -5,7 +5,7 @@ Automation features for file organization and management.
 import hashlib
 import shutil
 from pathlib import Path
-from typing import Dict, List, Callable, Optional
+from typing import Dict, List, Callable, Optional, Union
 from datetime import datetime, timedelta
 import os
 
@@ -209,28 +209,29 @@ class FileOrganizer:
         # First group by size (quick)
         size_groups: Dict[int, List[Path]] = {}
         
-        if recursive:
-            for root, _, files in os.walk(directory):
-                root_path = Path(root)
-                for file_name in files:
-                    file_path = root_path / file_name
-                    try:
-                        size = file_path.stat().st_size
-                        if size not in size_groups:
-                            size_groups[size] = []
-                        size_groups[size].append(file_path)
-                    except OSError:
-                        continue
-        else:
-            for file_path in directory.iterdir():
-                if file_path.is_file():
-                    try:
-                        size = file_path.stat().st_size
-                        if size not in size_groups:
-                            size_groups[size] = []
-                        size_groups[size].append(file_path)
-                    except OSError:
-                        continue
+        try:
+            if recursive:
+                entries = self._scan_recursive(directory)
+            else:
+                try:
+                    entries = (e for e in os.scandir(directory) if e.is_file())
+                except OSError:
+                    entries = []
+
+            for entry in entries:
+                try:
+                    # DirEntry.stat() is cached on Windows and faster than Path.stat() generally
+                    # Also avoids creating Path object until we know it matches
+                    size = entry.stat().st_size
+                    if size not in size_groups:
+                        size_groups[size] = []
+                    # We store Path object here because we need to return it eventually
+                    # and keeping DirEntry around might lock resources on some platforms
+                    size_groups[size].append(Path(entry.path))
+                except OSError:
+                    continue
+        except (PermissionError, OSError):
+            pass
         
         # Then verify with hash (slower but accurate)
         duplicates: Dict[str, List[Path]] = {}
@@ -254,6 +255,18 @@ class FileOrganizer:
         }
         
         return result
+
+    def _scan_recursive(self, directory: Union[Path, str]):
+        """Recursively scan directory using os.scandir."""
+        try:
+            with os.scandir(directory) as it:
+                for entry in it:
+                    if entry.is_dir(follow_symlinks=False):
+                        yield from self._scan_recursive(entry.path)
+                    elif entry.is_file(follow_symlinks=True):
+                        yield entry
+        except (PermissionError, OSError):
+            pass
     
     def batch_rename(
         self,
