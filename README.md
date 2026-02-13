@@ -49,7 +49,7 @@ To unlock the full potential of AI Mode, install the Gemini CLI:
 
 **For Termux / Android:**
 ```bash
-npm install -g @mmmbuto/gemini-cli-termux
+npm install -g @mmbuto/gemini-cli-termux
 ```
 
 **For Desktop / Server:**

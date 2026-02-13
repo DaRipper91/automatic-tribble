@@ -100,7 +100,7 @@ TFM is a dual-pane, keyboard-first file manager with optional AI assistance. It 
 
 ## AI Mode in Depth
 1. **Prerequisites**
-   - Optional: Install Gemini CLI (`npm install -g @google/gemini-cli` or `@mmmbuto/gemini-cli-termux` for Termux) and authenticate with `gemini login`.
+   - Optional: Install Gemini CLI (`npm install -g @google/gemini-cli` or `@mmbuto/gemini-cli-termux` for Termux) and authenticate with `gemini login`.
 2. **Target Directory**
    - Enter the folder where actions should run. It must exist; otherwise, the log shows an error.
 3. **Quick Actions**
