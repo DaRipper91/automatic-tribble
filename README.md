@@ -8,6 +8,8 @@
 
 TFM combines a robust Dual-Pane File Manager with powerful AI Automation. Whether you need precise control or intelligent batch operations, TFM adapts to your workflow.
 
+📘 **Full User Manual:** See [USER_MANUAL.md](USER_MANUAL.md) for a deep, sectioned guide to installation, usage, automation, and troubleshooting.
+
 ## ✨ Key Features
 
 ### 🤖 AI Mode (New!)
