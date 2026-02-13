@@ -564,6 +564,11 @@ class HelpScreen(ModalScreen):
     }
     """
 
+    BINDINGS = [Binding("escape", "dismiss", "Close")]
+
+    def action_dismiss(self):
+        self.dismiss()
+
     def compose(self) -> ComposeResult:
         with Container(id="help-dialog"):
             yield Label("Keyboard Shortcuts", classes="title")
