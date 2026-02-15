@@ -1,6 +1,6 @@
 import pytest
 from textual.app import App, ComposeResult
-from src.file_manager.screens import HelpScreen, InputScreen
+from src.file_manager.screens import HelpScreen, InputScreen, ConfirmationScreen
 from textual.widgets import Label, Button, Input
 
 class HeadlessApp(App):
@@ -83,4 +83,27 @@ async def test_input_screen_submit():
         input_widget = screen.query_one(Input)
         input_widget.value = "submitted"
         await pilot.press("enter")
+        assert app.screen is not screen
+
+@pytest.mark.asyncio
+async def test_confirmation_screen_custom_labels():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = ConfirmationScreen("Confirm Action?", confirm_label="Execute", confirm_variant="success")
+        await app.push_screen(screen)
+
+        # Check message
+        assert str(screen.query_one("#question", Label).render()) == "Confirm Action?"
+
+        # Check buttons
+        confirm_btn = screen.query_one("#confirm", Button)
+        assert str(confirm_btn.label) == "Execute"
+        assert confirm_btn.variant == "success"
+
+        cancel_btn = screen.query_one("#cancel", Button)
+        assert str(cancel_btn.label) == "Cancel"
+        assert cancel_btn.variant == "primary"
+
+        # Test confirm
+        await pilot.click("#confirm")
         assert app.screen is not screen
