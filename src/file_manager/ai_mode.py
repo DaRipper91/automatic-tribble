@@ -10,6 +10,7 @@ from textual.screen import Screen
 from textual.binding import Binding
 
 from .ai_integration import GeminiClient
+from .screens import ConfirmationScreen
 
 
 class AIModeScreen(Screen):
@@ -170,14 +171,26 @@ class AIModeScreen(Screen):
         log.write(f"[bold purple]AI Plan:[/ bold purple] {action_data['description']}")
 
         # 2. Execute
-        # In a real app, we might ask for confirmation here.
-        log.write("[dim]Executing...[/]")
-        result = self.gemini_client.execute_command(action_data)
+        def check_confirm(confirmed: bool) -> None:
+            if confirmed:
+                log.write("[dim]Executing...[/]")
+                result = self.gemini_client.execute_command(action_data)
 
-        if result.startswith("Error"):
-            log.write(f"[bold red]Result:[/ bold red] {result}")
-        else:
-            log.write(f"[bold green]Result:[/ bold green] {result}")
+                if result.startswith("Error"):
+                    log.write(f"[bold red]Result:[/ bold red] {result}")
+                else:
+                    log.write(f"[bold green]Result:[/ bold green] {result}")
+            else:
+                log.write("[yellow]Command cancelled.[/]")
+
+        self.app.push_screen(
+            ConfirmationScreen(
+                f"Execute command:\n{action_data['description']}?",
+                confirm_label="Execute",
+                confirm_variant="success"
+            ),
+            check_confirm
+        )
 
         # Clear input? Maybe keep it for reference.
         # command_input.value = ""

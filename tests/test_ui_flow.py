@@ -8,6 +8,7 @@ from src.file_manager.app import FileManagerApp
 from src.file_manager.start_menu import StartMenuScreen
 from src.file_manager.user_mode import UserModeScreen
 from src.file_manager.ai_mode import AIModeScreen
+from src.file_manager.screens import ConfirmationScreen
 
 @pytest.fixture
 def temp_test_dir():
@@ -80,6 +81,11 @@ async def test_navigate_to_ai_mode_and_interact(temp_test_dir):
         await pilot.press("enter")
         await pilot.pause()
 
+        # Handle Confirmation Screen
+        assert isinstance(app.screen, ConfirmationScreen)
+        await pilot.click("#confirm")
+        await pilot.pause()
+
         # Check log output
         log = app.screen.query_one("#output_log", RichLog)
         assert len(log.lines) > 2
@@ -108,6 +114,11 @@ async def test_ai_mode_custom_command(temp_test_dir):
 
         # Submit
         await pilot.press("enter")
+        await pilot.pause()
+
+        # Handle Confirmation Screen
+        assert isinstance(app.screen, ConfirmationScreen)
+        await pilot.click("#confirm")
         await pilot.pause()
 
         # Check log output
