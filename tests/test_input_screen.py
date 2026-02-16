@@ -11,17 +11,20 @@ class HeadlessApp(App):
 async def test_input_screen_composition():
     app = HeadlessApp()
     async with app.run_test() as pilot:
-        screen = InputScreen("Test Prompt", "Initial")
+        screen = InputScreen("Test Title", "Test Message", "Initial")
         await app.push_screen(screen)
 
-        # Check prompt
-        prompt = screen.query_one("#prompt", Label)
-        assert str(prompt.render()) == "Test Prompt"
+        # Check title and message
+        title = screen.query_one(".title", Label)
+        assert str(title.render()) == "Test Title"
+
+        message = screen.query_one("#message", Label)
+        assert str(message.render()) == "Test Message"
 
         # Check input
         input_widget = screen.query_one(Input)
         assert input_widget.value == "Initial"
-        assert input_widget.placeholder == "Enter name"
+        assert input_widget.placeholder == "Enter value..."
 
         # Check buttons
         ok_btn = screen.query_one("#ok", Button)
@@ -32,9 +35,6 @@ async def test_input_screen_composition():
         # Test OK button
         input_widget.value = "New Value"
         await pilot.click("#ok")
-        # After clicking OK, the screen should be dismissed with the value
-        # But run_test context manager handles app shutdown, so we can't easily check the return value here directly
-        # without mocking or using a different approach. However, we can check if the screen is dismissed.
         assert app.screen is not screen
 
 @pytest.mark.asyncio
@@ -47,11 +47,11 @@ async def test_input_screen_cancel():
         result = res
 
     async with app.run_test() as pilot:
-        screen = InputScreen("Test Prompt")
+        screen = InputScreen("Test Title", "Test Message")
         await app.push_screen(screen, handle_result)
 
         await pilot.click("#cancel")
-        assert result is None
+        assert result == ""  # Cancel returns empty string in the new InputScreen
         assert app.screen is not screen
 
 @pytest.mark.asyncio
@@ -64,7 +64,7 @@ async def test_input_screen_submit():
         result = res
 
     async with app.run_test() as pilot:
-        screen = InputScreen("Test Prompt")
+        screen = InputScreen("Test Title", "Test Message")
         await app.push_screen(screen, handle_result)
 
         input_widget = screen.query_one(Input)

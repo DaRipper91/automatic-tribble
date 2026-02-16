@@ -162,6 +162,11 @@ class UserModeConfigScreen(ModalScreen[str]):
     }
     """
 
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss(None)
+
     def compose(self) -> ComposeResult:
         with Container(id="config-dialog"):
             yield Label("Select Layout", classes="title")
@@ -433,6 +438,11 @@ class ConfirmationScreen(ModalScreen[bool]):
     }
     """
 
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss(False)
+
     def __init__(self, message: str):
         super().__init__()
         self.message = message
@@ -451,72 +461,6 @@ class ConfirmationScreen(ModalScreen[bool]):
             self.dismiss(False)
 
 
-class InputScreen(ModalScreen[Optional[str]]):
-    """Screen for getting text input from user."""
-
-    CSS = """
-    InputScreen {
-        align: center middle;
-    }
-
-    #input-dialog {
-        padding: 0 1;
-        width: 60;
-        height: 11;
-        border: thick $background 80%;
-        background: $surface;
-    }
-
-    #prompt {
-        content-align: center middle;
-        height: auto;
-        width: 100%;
-        margin-top: 1;
-    }
-
-    Input {
-        margin: 1 0;
-    }
-
-    #buttons {
-        height: auto;
-        width: 100%;
-        align: center bottom;
-        dock: bottom;
-        margin-bottom: 1;
-    }
-
-    Button {
-        margin: 0 1;
-        width: 1fr;
-    }
-    """
-
-    def __init__(self, prompt: str, initial_value: str = ""):
-        super().__init__()
-        self.prompt = prompt
-        self.initial_value = initial_value
-
-    def compose(self) -> ComposeResult:
-        with Container(id="input-dialog"):
-            yield Label(self.prompt, id="prompt")
-            yield Input(placeholder="Enter name", value=self.initial_value, id="input")
-            with Horizontal(id="buttons"):
-                yield Button("Cancel", variant="error", id="cancel")
-                yield Button("OK", variant="primary", id="ok")
-
-    def on_mount(self) -> None:
-        self.query_one(Input).focus()
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "ok":
-            value = self.query_one(Input).value
-            self.dismiss(value)
-        else:
-            self.dismiss(None)
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        self.dismiss(event.value)
 
 
 class HelpScreen(ModalScreen):
@@ -647,6 +591,11 @@ class InputScreen(ModalScreen[str]):
         width: 1fr;
     }
     """
+
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss("")
 
     def __init__(self, title: str, message: str, initial_value: str = ""):
         super().__init__()

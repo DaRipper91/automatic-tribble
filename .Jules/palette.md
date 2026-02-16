@@ -9,3 +9,11 @@
 ## 2025-05-21 - [TUI Accessibility: Modal Escape Binding]
 **Learning:** Textual's `ModalScreen` does not automatically bind the `Escape` key to dismiss the modal. This breaks user expectation for modal dialogs.
 **Action:** Explicitly add `BINDINGS = [Binding("escape", "dismiss", "Close")]` and an `action_dismiss` method (calling `self.dismiss()`) to all `ModalScreen` implementations.
+
+## 2025-05-22 - [Python Class Shadowing]
+**Learning:** Python allows multiple class definitions with the same name in a single file, with the last one silently overwriting previous ones. This can lead to confusing bugs where tests interact with a different version of the class than expected.
+**Action:** Always search for duplicate class definitions when modifying a file, especially in large UI files like `screens.py`.
+
+## 2025-05-22 - [TUI Overwrite Confirmation Pattern]
+**Learning:** To implement "Overwrite" functionality when the underlying API (like `shutil` or `pathlib`) raises `FileExistsError`, use a `try...except` block that catches the error and presents a `ConfirmationScreen`. The confirmation callback can then delete the target and retry the operation.
+**Action:** Use this pattern for all file operations that might conflict, ensuring the retry logic is encapsulated within the confirmation callback.
