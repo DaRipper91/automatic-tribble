@@ -12,7 +12,7 @@ from textual.screen import Screen
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
-from .screens import ConfirmationScreen, HelpScreen
+from .screens import ConfirmationScreen, HelpScreen, InputScreen
 
 
 class UserModeScreen(Screen):
@@ -184,11 +184,54 @@ class UserModeScreen(Screen):
 
     def action_new_dir(self) -> None:
         """Create a new directory."""
-        self.notify("New directory creation - feature placeholder")
+        active_panel_widget = self.get_active_panel()
+        current_dir = active_panel_widget.current_dir
+
+        def do_create_dir(dir_name: str) -> None:
+            if not dir_name:
+                return
+
+            try:
+                new_path = current_dir / dir_name
+                self.file_ops.create_directory(new_path)
+                self.notify(f"Created directory {dir_name}")
+                active_panel_widget.refresh_view()
+            except Exception as e:
+                self.notify(f"Error creating directory: {str(e)}", severity="error")
+
+        self.app.push_screen(
+            InputScreen(
+                title="New Directory",
+                message="Enter directory name:"
+            ),
+            do_create_dir
+        )
 
     def action_rename(self) -> None:
         """Rename selected file/directory."""
-        self.notify("Rename - feature placeholder")
+        active_panel_widget = self.get_active_panel()
+        selected_path = active_panel_widget.get_selected_path()
+
+        if selected_path:
+            def do_rename(new_name: str) -> None:
+                if not new_name or new_name == selected_path.name:
+                    return
+
+                try:
+                    self.file_ops.rename(selected_path, new_name)
+                    self.notify(f"Renamed to {new_name}")
+                    active_panel_widget.refresh_view()
+                except Exception as e:
+                    self.notify(f"Error renaming: {str(e)}", severity="error")
+
+            self.app.push_screen(
+                InputScreen(
+                    title="Rename",
+                    message=f"Rename {selected_path.name} to:",
+                    initial_value=selected_path.name
+                ),
+                do_rename
+            )
 
     def action_refresh(self) -> None:
         """Refresh both panels."""
