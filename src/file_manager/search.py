@@ -202,15 +202,18 @@ class FileSearcher:
         return results
 
     def _scan_recursive(self, directory: Union[Path, str]):
-        """Recursively scan directory using os.scandir."""
-        try:
-            with os.scandir(directory) as it:
-                for entry in it:
-                    yield entry
-                    if entry.is_dir(follow_symlinks=False):
-                        yield from self._scan_recursive(entry.path)
-        except (PermissionError, OSError):
-            pass
+        """Recursively scan directory using os.scandir (iterative implementation)."""
+        stack = [str(directory)]
+        while stack:
+            current_dir = stack.pop()
+            try:
+                with os.scandir(current_dir) as it:
+                    for entry in it:
+                        yield entry
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+            except (PermissionError, OSError):
+                pass
     
     @staticmethod
     def _is_text_file(file_path: Path) -> bool:
