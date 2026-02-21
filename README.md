@@ -1,74 +1,81 @@
-# TFM (The Future Manager) File Manager
+# 📁 TFM - The Future Manager
 
-## Introduction
-TFM is an innovative file manager application designed to simplify and enhance file management tasks. It combines a robust interactive text-based user interface (TUI) with advanced AI automation capabilities, making file operations intuitive and efficient.
+![Python](https://img.shields.io/badge/python-3.8%2B-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20WSL-lightgrey)
 
-## Features
-- **Interactive TUI**: Navigate and manage files using a user-friendly terminal interface.
-- **AI Automation**: Utilize AI to automate repetitive file management tasks.
-- **Multi-Platform Support**: Runs seamlessly on various operating systems, including Windows, macOS, and Linux.
-- **Customization**: Configure settings and preferences to suit individual workflows.
-- **File Operations**: Fast and reliable file copying, moving, renaming, and deleting.
-- **Search Functionality**: Quick search feature to locate files easily.
-- **Scripting Support**: Support for custom scripts to extend functionality.
-
-## Installation
-To install TFM, follow these steps:
-1. **Clone the repository**:  
-   ```bash
-   git clone https://github.com/DaRipper91/automatic-tribble.git
-   cd automatic-tribble
-   ```  
-2. **Install dependencies**:  
-   ```bash
-   pip install -r requirements.txt
-   ```  
-3. **Run the application**:  
-   ```bash
-   python main.py
-   ```
-
-## Usage
-After installation, you can launch TFM by running `python main.py`. 
-
-### Basic Commands
-- `list`: Display files in the current directory.
-- `move <source> <destination>`: Move files from the source to the destination.
-- `copy <source> <destination>`: Copy files from the source to the destination.
-- `delete <filename>`: Delete the specified file.
-
-For a full list of commands, type `help` within the application.
-
-## Architecture
-TFM is structured in a modular way:
-- **Core Module**: Handles the main functionalities of TFM.
-- **TUI Module**: Responsible for rendering the user interface and user interactions.
-- **AI Module**: Implements automation capabilities and intelligent suggestions.
-
-This structure allows for easy scalability and maintenance.
-
-## Contribution Guidelines
-We welcome contributions! To contribute:
-1. Fork the repository.
-2. Create your feature branch:  
-   ```bash
-   git checkout -b feature/YourFeature
-   ```
-3. Commit your changes:  
-   ```bash
-   git commit -m 'Add some feature'
-   ```
-4. Push to the branch:  
-   ```bash
-   git push origin feature/YourFeature
-   ```
-5. Open a pull request.
-
-Please ensure your code adheres to the project's coding standards.
-
-## License
-TFM is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
+**TFM (The Future Manager)** is a next-generation file management solution that bridges the gap between classic terminal efficiency and modern AI automation. Whether you need a robust dual-pane file browser or an intelligent assistant to organize your digital life, TFM has you covered.
 
 ---
 
-For further information, feedback, or issues, please reach out via GitHub issues or contact us directly.
+## 🚀 Key Features
+
+### 🖥️ **Interactive TUI (User Mode)**
+- **Dual-Pane Interface**: Classic Commander-style layout for efficient file operations.
+- **Keyboard-First Navigation**: Fast, intuitive shortcuts for power users.
+- **Async Operations**: Non-blocking file deletions and background tasks keep the UI responsive.
+- **Rich Visuals**: Built with [Textual](https://textual.textualize.io/) for a beautiful terminal experience.
+
+### 🤖 **AI Automation (AI Mode)**
+- **Natural Language Commands**: "Organize my downloads by date" or "Find duplicates in Photos".
+- **Smart Execution**: The built-in AI engine (powered by Gemini integration) interprets your intent and executes complex batch operations.
+- **Quick Actions**: One-click buttons for common tasks like cleanup, organization, and renaming.
+
+### ⚡ **Automation CLI (`tfm-auto`)**
+- **Scriptable Power**: Automate your workflows directly from the shell.
+- **Batch Processing**: Organize, clean, search, and rename thousands of files in seconds.
+- **Dry Run Support**: Preview changes before they happen.
+
+---
+
+## 📦 Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/DaRipper91/automatic-tribble.git
+    cd automatic-tribble
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+3.  **Optional (for CLI command access):**
+    ```bash
+    pip install -e .
+    ```
+
+---
+
+## 🎮 Quick Start
+
+### **Launch the TUI**
+Start the interactive file manager:
+```bash
+python run.py
+```
+*Navigate with arrow keys, use `Tab` to switch panels, and press `?` or `h` for help.*
+
+### **Run an Automation Task**
+Organize your Downloads folder by file type immediately:
+```bash
+python src/file_manager/cli.py organize --source ~/Downloads --target ~/Documents/Sorted --by-type
+```
+*(Or use `tfm-auto` if you installed with `pip install -e .`)*
+
+---
+
+## 📚 Documentation
+
+For a deep dive into all features, keyboard shortcuts, and advanced configuration, please consult the **[User Manual](USER_MANUAL.md)**.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
