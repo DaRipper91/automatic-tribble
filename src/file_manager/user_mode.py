@@ -9,6 +9,7 @@ from textual.widgets import Header, Footer, Label
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
+from textual.worker import work
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
@@ -137,13 +138,17 @@ class UserModeScreen(Screen):
         if selected_path:
             target_panel = self.get_inactive_panel()
             target_dir = target_panel.current_dir
+            self._do_copy(selected_path, target_dir, target_panel)
 
-            try:
-                self.file_ops.copy(selected_path, target_dir)
-                self.notify(f"Copied {selected_path.name} to {target_dir}")
-                target_panel.refresh_view()
-            except Exception as e:
-                self.notify(f"Error copying: {str(e)}", severity="error")
+    @work(thread=True, exclusive=True)
+    def _do_copy(self, selected_path: Path, target_dir: Path, target_panel: FilePanel) -> None:
+        """Perform copy operation in a background thread."""
+        try:
+            self.file_ops.copy(selected_path, target_dir)
+            self.notify(f"Copied {selected_path.name} to {target_dir}")
+            target_panel.refresh_view()
+        except Exception as e:
+            self.notify(f"Error copying: {str(e)}", severity="error")
 
     def action_move(self) -> None:
         """Move selected file/directory."""
@@ -153,14 +158,18 @@ class UserModeScreen(Screen):
         if selected_path:
             target_panel = self.get_inactive_panel()
             target_dir = target_panel.current_dir
+            self._do_move(selected_path, target_dir, active_panel_widget, target_panel)
 
-            try:
-                self.file_ops.move(selected_path, target_dir)
-                self.notify(f"Moved {selected_path.name} to {target_dir}")
-                active_panel_widget.refresh_view()
-                target_panel.refresh_view()
-            except Exception as e:
-                self.notify(f"Error moving: {str(e)}", severity="error")
+    @work(thread=True, exclusive=True)
+    def _do_move(self, selected_path: Path, target_dir: Path, active_panel: FilePanel, target_panel: FilePanel) -> None:
+        """Perform move operation in a background thread."""
+        try:
+            self.file_ops.move(selected_path, target_dir)
+            self.notify(f"Moved {selected_path.name} to {target_dir}")
+            active_panel.refresh_view()
+            target_panel.refresh_view()
+        except Exception as e:
+            self.notify(f"Error moving: {str(e)}", severity="error")
 
     def action_delete(self) -> None:
         """Delete selected file/directory."""
