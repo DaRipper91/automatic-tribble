@@ -21,6 +21,20 @@ async def test_input_screen_composition():
         # Check message
         message = screen.query_one("#message", Label)
         assert str(message.render()) == "Test Message"
+        await app.push_screen(screen)
+
+        # Check title and message
+        title = screen.query_one(".title", Label)
+        assert str(title.render()) == "Test Title"
+
+        message = screen.query_one("#message", Label)
+        assert str(message.render()) == "Test Message"
+        screen = InputScreen("Test Title", "Test Prompt", "Initial")
+        await app.push_screen(screen)
+
+        # Check prompt
+        prompt = screen.query_one("#message", Label)
+        assert str(prompt.render()) == "Test Prompt"
 
         # Check input
         input_widget = screen.query_one(Input)
@@ -58,6 +72,17 @@ async def test_input_screen_cancel():
 
         await pilot.click("#cancel")
         assert result == "" # Cancel returns empty string in new InputScreen logic
+        screen = InputScreen("Test Title", "Test Message")
+        await app.push_screen(screen, handle_result)
+
+        await pilot.click("#cancel")
+        assert result == ""  # Cancel returns empty string in the new InputScreen
+        screen = InputScreen("Test Title", "Test Prompt")
+        await app.push_screen(screen, handle_result)
+
+        await pilot.click("#cancel")
+        # In the new InputScreen, cancel returns empty string "", not None
+        assert result == ""
         assert app.screen is not screen
 
 @pytest.mark.asyncio
@@ -71,6 +96,8 @@ async def test_input_screen_submit():
 
     async with app.run_test() as pilot:
         screen = InputScreen("Title", "Message")
+        screen = InputScreen("Test Title", "Test Message")
+        screen = InputScreen("Test Title", "Test Prompt")
         await app.push_screen(screen, handle_result)
 
         input_widget = screen.query_one(Input)
@@ -78,4 +105,21 @@ async def test_input_screen_submit():
         await pilot.press("enter")
 
         assert result == "Test Dir"
+        assert app.screen is not screen
+
+@pytest.mark.asyncio
+async def test_input_screen_escape():
+    app = HeadlessApp()
+    result = None
+
+    def handle_result(res):
+        nonlocal result
+        result = res
+
+    async with app.run_test() as pilot:
+        screen = InputScreen("Title", "Prompt")
+        await app.push_screen(screen, handle_result)
+
+        await pilot.press("escape")
+        assert result == ""
         assert app.screen is not screen

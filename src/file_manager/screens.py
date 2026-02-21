@@ -161,6 +161,11 @@ class UserModeConfigScreen(ModalScreen[str]):
     }
     """
 
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss(None)
+
     def compose(self) -> ComposeResult:
         with Container(id="config-dialog"):
             yield Label("Select Layout", classes="title")
@@ -399,6 +404,8 @@ class ProgressScreen(ModalScreen):
 class ConfirmationScreen(ModalScreen[bool]):
     """Screen for confirming actions."""
 
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
     CSS = """
     ConfirmationScreen {
         align: center middle;
@@ -432,6 +439,12 @@ class ConfirmationScreen(ModalScreen[bool]):
     }
     """
 
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss(False)
+
+    def __init__(self, message: str):
     def __init__(self, message: str, confirm_label: str = "Delete", confirm_variant: str = "error"):
         super().__init__()
         self.message = message
@@ -450,6 +463,9 @@ class ConfirmationScreen(ModalScreen[bool]):
             self.dismiss(True)
         else:
             self.dismiss(False)
+
+    def action_cancel(self):
+        self.dismiss(False)
 
 
 
@@ -538,6 +554,8 @@ class HelpScreen(ModalScreen):
 class InputScreen(ModalScreen[str]):
     """Screen for getting text input from the user."""
 
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
     CSS = """
     InputScreen {
         align: center middle;
@@ -583,6 +601,11 @@ class InputScreen(ModalScreen[str]):
     }
     """
 
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss("")
+
     def __init__(self, title: str, message: str, initial_value: str = ""):
         super().__init__()
         self.title_text = title
@@ -606,3 +629,6 @@ class InputScreen(ModalScreen[str]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.dismiss(event.value)
+
+    def action_cancel(self):
+        self.dismiss("")
