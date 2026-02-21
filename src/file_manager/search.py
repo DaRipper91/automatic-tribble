@@ -1,4 +1,5 @@
 import os
+import io
 import fnmatch
 from pathlib import Path
 from typing import List, Optional, Union
@@ -64,6 +65,13 @@ class FileSearcher:
         # Determine case sensitivity for the search text once
         search_term = search_text if case_sensitive else search_text.lower()
         
+        # Set of known text extensions for quick check
+        text_extensions = {
+            ".txt", ".md", ".py", ".js", ".java", ".c", ".cpp", ".h",
+            ".json", ".xml", ".html", ".css", ".sh", ".bash", ".yaml",
+            ".yml", ".ini", ".cfg", ".conf", ".log", ".csv"
+        }
+
         try:
             # We use os.walk here as it is convenient for simple iteration where we need root
             for root, _, files in os.walk(directory):
@@ -73,18 +81,42 @@ class FileSearcher:
                     if fnmatch.fnmatch(file_name, file_pattern):
                         file_path = root_path / file_name
                         
-                        if self._is_text_file(file_path):
-                            try:
+                        try:
+                            # Check extension first
+                            is_known_text = file_path.suffix.lower() in text_extensions
+
+                            if is_known_text:
+                                # Open as text directly
                                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                                    # Simple line-by-line search for now
                                     for line in f:
                                         if not case_sensitive:
                                             line = line.lower()
                                         if search_term in line:
                                             results.append(file_path)
                                             break
-                            except (IOError, OSError):
-                                continue
+                            else:
+                                # Not a known extension, check for binary content
+                                # Open as binary to check first few bytes
+                                with open(file_path, "rb") as f:
+                                    chunk = f.read(FILE_TYPE_CHECK_BYTES)
+                                    if b"\x00" in chunk:
+                                        # Binary file, skip
+                                        continue
+
+                                    # It's likely text, rewind and read rest
+                                    f.seek(0)
+
+                                    # Wrap the binary stream with TextIOWrapper
+                                    # This avoids closing and reopening the file
+                                    with io.TextIOWrapper(f, encoding="utf-8", errors="ignore") as text_f:
+                                        for line in text_f:
+                                            if not case_sensitive:
+                                                line = line.lower()
+                                            if search_term in line:
+                                                results.append(file_path)
+                                                break
+                        except (IOError, OSError):
+                            continue
         except (PermissionError, OSError):
             pass
         
@@ -143,24 +175,3 @@ class FileSearcher:
                             stack.append(entry.path)
             except (PermissionError, OSError):
                 pass
-
-    @staticmethod
-    def _is_text_file(file_path: Path) -> bool:
-        """Check if a file is likely a text file."""
-        text_extensions = {
-            ".txt", ".md", ".py", ".js", ".java", ".c", ".cpp", ".h",
-            ".json", ".xml", ".html", ".css", ".sh", ".bash", ".yaml",
-            ".yml", ".ini", ".cfg", ".conf", ".log", ".csv"
-        }
-        
-        if file_path.suffix.lower() in text_extensions:
-            return True
-
-        try:
-            with open(file_path, "rb") as f:
-                chunk = f.read(FILE_TYPE_CHECK_BYTES)
-                if b"\x00" in chunk:
-                    return False
-                return True
-        except (IOError, OSError):
-            return False
