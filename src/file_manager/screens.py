@@ -444,7 +444,6 @@ class ConfirmationScreen(ModalScreen[bool]):
     def action_dismiss(self) -> None:
         self.dismiss(False)
 
-    def __init__(self, message: str):
     def __init__(self, message: str, confirm_label: str = "Delete", confirm_variant: str = "error"):
         super().__init__()
         self.message = message

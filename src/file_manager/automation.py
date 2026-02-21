@@ -81,6 +81,7 @@ class FileOrganizer:
                 
                 # Move or copy file
                 target_path = category_dir / file_path.name
+                target_path = self._get_unique_path(target_path)
                 
                 if move:
                     shutil.move(str(file_path), str(target_path))
@@ -138,6 +139,7 @@ class FileOrganizer:
             
             # Move or copy file
             target_path = date_dir / file_path.name
+            target_path = self._get_unique_path(target_path)
             
             if move:
                 shutil.move(str(file_path), str(target_path))
@@ -323,6 +325,32 @@ class FileOrganizer:
         
         return renamed_files
     
+    @staticmethod
+    def _get_unique_path(target_path: Path) -> Path:
+        """
+        Generate a unique path by appending a counter if target exists.
+
+        Args:
+            target_path: Desired target path
+
+        Returns:
+            Unique path that does not currently exist
+        """
+        if not target_path.exists():
+            return target_path
+
+        stem = target_path.stem
+        suffix = target_path.suffix
+        parent = target_path.parent
+        counter = 1
+
+        while True:
+            # Use _1, _2, etc. format
+            new_path = parent / f"{stem}_{counter}{suffix}"
+            if not new_path.exists():
+                return new_path
+            counter += 1
+
     @staticmethod
     def _build_extension_map(categories: Dict[str, List[str]]) -> Dict[str, str]:
         """
