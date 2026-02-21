@@ -2,6 +2,7 @@ import os
 import fnmatch
 from pathlib import Path
 from typing import List, Optional, Union
+from .utils import recursive_scan
 
 FILE_TYPE_CHECK_BYTES = 1024
 
@@ -29,7 +30,7 @@ class FileSearcher:
         try:
             if recursive:
                 # Use list() to force iteration and catch errors early if any
-                entries_iter = self._scan_recursive(directory)
+                entries_iter = recursive_scan(directory)
             else:
                 entries_iter = os.scandir(directory)
 
@@ -105,7 +106,7 @@ class FileSearcher:
         
         try:
             if recursive:
-                entries_iter = self._scan_recursive(directory)
+                entries_iter = recursive_scan(directory)
             else:
                 entries_iter = os.scandir(directory)
 
@@ -129,20 +130,6 @@ class FileSearcher:
 
         self.results = results
         return results
-
-    def _scan_recursive(self, directory: Union[Path, str]):
-        """Recursively scan directory using os.scandir (iterative stack-based)."""
-        stack = [str(directory)]
-        while stack:
-            current_dir = stack.pop()
-            try:
-                with os.scandir(current_dir) as it:
-                    for entry in it:
-                        yield entry
-                        if entry.is_dir(follow_symlinks=False):
-                            stack.append(entry.path)
-            except (PermissionError, OSError):
-                pass
 
     @staticmethod
     def _is_text_file(file_path: Path) -> bool:

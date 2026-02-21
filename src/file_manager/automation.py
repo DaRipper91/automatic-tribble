@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Callable, Optional, Union
 from datetime import datetime, timedelta
 import os
+from .utils import recursive_scan
 
 
 # Constants
@@ -213,7 +214,7 @@ class FileOrganizer:
         
         try:
             if recursive:
-                entries = self._scan_recursive(directory)
+                entries = (e for e in recursive_scan(directory) if e.is_file(follow_symlinks=True))
             else:
                 try:
                     entries = (e for e in os.scandir(directory) if e.is_file())
@@ -258,18 +259,6 @@ class FileOrganizer:
         
         return result
 
-    def _scan_recursive(self, directory: Union[Path, str]):
-        """Recursively scan directory using os.scandir."""
-        try:
-            with os.scandir(directory) as it:
-                for entry in it:
-                    if entry.is_dir(follow_symlinks=False):
-                        yield from self._scan_recursive(entry.path)
-                    elif entry.is_file(follow_symlinks=True):
-                        yield entry
-        except (PermissionError, OSError):
-            pass
-    
     def batch_rename(
         self,
         directory: Path,
