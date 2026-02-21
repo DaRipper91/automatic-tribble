@@ -189,15 +189,7 @@ class UserModeConfigScreen(ModalScreen[str]):
             self.dismiss(None)
 
 
-try:
-    from .ai_utils import AIExecutor
-except ImportError:
-    # Fallback or mock
-    class AIExecutor:
-        def __init__(self): pass
-        def is_available(self): return False
-        def execute_prompt(self, p): return "Error: AI Utils not found."
-        def generate_automation_command(self, r): return None, "Error: AI Utils not found."
+from .ai_utils import AIExecutor
 
 
 class AIConfigScreen(Screen):
