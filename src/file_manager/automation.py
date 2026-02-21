@@ -303,8 +303,9 @@ class FileOrganizer:
 
                         new_path = root_path / new_name
                         
-                        old_path.rename(new_path)
-                        renamed_files.append(new_path)
+                        if not new_path.exists():
+                            old_path.rename(new_path)
+                            renamed_files.append(new_path)
         else:
             for file_path in directory.iterdir():
                 if file_path.is_file() and pattern in file_path.name:
@@ -316,8 +317,9 @@ class FileOrganizer:
 
                     new_path = file_path.parent / new_name
                     
-                    file_path.rename(new_path)
-                    renamed_files.append(new_path)
+                    if not new_path.exists():
+                        file_path.rename(new_path)
+                        renamed_files.append(new_path)
         
         return renamed_files
     
