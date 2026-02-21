@@ -132,6 +132,7 @@ class UserModeScreen(Screen):
 
     def action_copy(self) -> None:
         """Copy selected file/directory."""
+        self._handle_transfer("copy")
         active_panel_widget = self.get_active_panel()
         selected_path = active_panel_widget.get_selected_path()
 
@@ -175,15 +176,34 @@ class UserModeScreen(Screen):
 
     def action_move(self) -> None:
         """Move selected file/directory."""
-        active_panel_widget = self.get_active_panel()
-        selected_path = active_panel_widget.get_selected_path()
+        self._handle_transfer("move")
 
-        if selected_path:
-            target_panel = self.get_inactive_panel()
-            target_dir = target_panel.current_dir
+    def _handle_transfer(self, operation: str) -> None:
+        """Handle copy or move operation."""
+        active_panel = self.get_active_panel()
+        selected_path = active_panel.get_selected_path()
 
-            try:
+        if not selected_path:
+            return
+
+        target_panel = self.get_inactive_panel()
+        target_dir = target_panel.current_dir
+
+        # Define these before try to avoid UnboundLocalError in except block
+        op_ing = "copying" if operation == "copy" else "moving"
+        verb = "Copied" if operation == "copy" else "Moved"
+
+        try:
+            if operation == "copy":
+                self.file_ops.copy(selected_path, target_dir)
+            else:  # move
                 self.file_ops.move(selected_path, target_dir)
+                active_panel.refresh_view()
+
+            self.notify(f"{verb} {selected_path.name} to {target_dir}")
+            target_panel.refresh_view()
+        except Exception as e:
+            self.notify(f"Error {op_ing}: {str(e)}", severity="error")
                 self.notify(f"Moved {selected_path.name} to {target_dir}")
                 active_panel_widget.refresh_view()
                 target_panel.refresh_view()
