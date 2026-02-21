@@ -63,37 +63,13 @@ class FileOrganizer:
             extension_map = self._DEFAULT_EXTENSION_MAP
         else:
             extension_map = self._build_extension_map(categories)
-        
-        organized = {}
-        target_dir.mkdir(parents=True, exist_ok=True)
-        
-        for file_path in source_dir.iterdir():
-            if not file_path.is_file():
-                continue
             
-            # Find matching category
-            category = self._get_file_category(file_path, extension_map)
-            
-            if category:
-                # Create category directory
-                category_dir = target_dir / category
-                category_dir.mkdir(exist_ok=True)
-                
-                # Move or copy file
-                target_path = category_dir / file_path.name
-                target_path = self._get_unique_path(target_path)
-                
-                if move:
-                    shutil.move(str(file_path), str(target_path))
-                else:
-                    shutil.copy2(file_path, target_path)
-                
-                if category not in organized:
-                    organized[category] = []
-                organized[category].append(target_path)
-        
-        self.organized_files = organized
-        return organized
+        return self._organize_generic(
+            source_dir,
+            target_dir,
+            lambda p: self._get_file_category(p, extension_map),
+            move
+        )
     
     def organize_by_date(
         self,
@@ -114,6 +90,37 @@ class FileOrganizer:
         Returns:
             Dictionary mapping date strings to lists of organized files
         """
+        def get_date_key(file_path: Path) -> str:
+            mtime = file_path.stat().st_mtime
+            date = datetime.fromtimestamp(mtime)
+            return date.strftime(date_format)
+
+        return self._organize_generic(
+            source_dir,
+            target_dir,
+            get_date_key,
+            move
+        )
+
+    def _organize_generic(
+        self,
+        source_dir: Path,
+        target_dir: Path,
+        key_func: Callable[[Path], Optional[str]],
+        move: bool
+    ) -> Dict[str, List[Path]]:
+        """
+        Generic method to organize files based on a key generation function.
+
+        Args:
+            source_dir: Directory containing files to organize
+            target_dir: Directory where organized files will be placed
+            key_func: Function that takes a file Path and returns a string key (subdirectory) or None
+            move: If True, move files; if False, copy files
+
+        Returns:
+            Dictionary mapping keys to lists of organized files
+        """
         organized = {}
         target_dir.mkdir(parents=True, exist_ok=True)
         
@@ -121,24 +128,24 @@ class FileOrganizer:
             if not file_path.is_file():
                 continue
             
-            # Get file modification time
-            mtime = file_path.stat().st_mtime
-            date = datetime.fromtimestamp(mtime)
-            date_str = date.strftime(date_format)
-            
-            # Create date directory and secure against path traversal
-            date_dir = target_dir / date_str
+            key = key_func(file_path)
+            if not key:
+                continue
 
+            # Create target directory and secure against path traversal
+            key_dir = target_dir / key
+            
             try:
-                if not date_dir.resolve().is_relative_to(target_dir.resolve()):
+                # Resolve paths to handle '..' etc.
+                if not key_dir.resolve().is_relative_to(target_dir.resolve()):
                     continue
             except (ValueError, RuntimeError):
                 continue
 
-            date_dir.mkdir(parents=True, exist_ok=True)
+            key_dir.mkdir(parents=True, exist_ok=True)
             
             # Move or copy file
-            target_path = date_dir / file_path.name
+            target_path = key_dir / file_path.name
             target_path = self._get_unique_path(target_path)
             
             if move:
@@ -146,10 +153,10 @@ class FileOrganizer:
             else:
                 shutil.copy2(file_path, target_path)
             
-            if date_str not in organized:
-                organized[date_str] = []
-            organized[date_str].append(target_path)
-        
+            if key not in organized:
+                organized[key] = []
+            organized[key].append(target_path)
+
         self.organized_files = organized
         return organized
     
