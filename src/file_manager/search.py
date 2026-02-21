@@ -74,17 +74,8 @@ class FileSearcher:
                         file_path = root_path / file_name
                         
                         if self._is_text_file(file_path):
-                            try:
-                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                                    # Simple line-by-line search for now
-                                    for line in f:
-                                        if not case_sensitive:
-                                            line = line.lower()
-                                        if search_term in line:
-                                            results.append(file_path)
-                                            break
-                            except (IOError, OSError):
-                                continue
+                            if self._file_contains_term(file_path, search_term, case_sensitive):
+                                results.append(file_path)
         except (PermissionError, OSError):
             pass
         
@@ -143,6 +134,20 @@ class FileSearcher:
                             stack.append(entry.path)
             except (PermissionError, OSError):
                 pass
+
+    @staticmethod
+    def _file_contains_term(file_path: Path, search_term: str, case_sensitive: bool) -> bool:
+        """Check if a file contains the search term."""
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if not case_sensitive:
+                        line = line.lower()
+                    if search_term in line:
+                        return True
+        except (IOError, OSError):
+            pass
+        return False
 
     @staticmethod
     def _is_text_file(file_path: Path) -> bool:
