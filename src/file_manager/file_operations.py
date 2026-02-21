@@ -146,6 +146,36 @@ class FileOperations:
         
         if path.is_file():
             return path.stat().st_size
+        elif path.is_dir():
+            return self._get_directory_size(str(path))
+        return 0
+
+    def _get_directory_size(self, directory: str) -> int:
+        """
+        Iteratively calculate directory size using os.scandir.
+
+        This is significantly faster than Path.rglob() for large directory trees
+        because it avoids creating Path objects for every entry and uses
+        os.scandir's cached stat results where possible.
+        """
+        total = 0
+        stack = [directory]
+
+        while stack:
+            current_dir = stack.pop()
+            try:
+                with os.scandir(current_dir) as it:
+                    for entry in it:
+                        try:
+                            # Use follow_symlinks=True for files to match Path.is_file() behavior
+                            if entry.is_file(follow_symlinks=True):
+                                total += entry.stat().st_size
+                            elif entry.is_dir(follow_symlinks=False):
+                                stack.append(entry.path)
+                        except OSError:
+                            pass
+            except OSError:
+                pass
 
         total = 0
         try:
