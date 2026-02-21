@@ -9,7 +9,7 @@ from textual.widgets import Header, Footer, Label
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.worker import work
+from textual import work
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
@@ -132,54 +132,14 @@ class UserModeScreen(Screen):
 
     def action_copy(self) -> None:
         """Copy selected file/directory."""
-        self._handle_transfer("copy")
-        active_panel_widget = self.get_active_panel()
-        selected_path = active_panel_widget.get_selected_path()
-
-        if selected_path:
-            target_panel = self.get_inactive_panel()
-            target_dir = target_panel.current_dir
-
-            try:
-                self.file_ops.copy(selected_path, target_dir)
-                self.notify(f"Copied {selected_path.name} to {target_dir}")
-                target_panel.refresh_view()
-            except FileExistsError:
-                def confirm_overwrite(confirmed: bool) -> None:
-                    if confirmed:
-                        try:
-                            target_path = target_dir / selected_path.name
-                            self.file_ops.delete(target_path)
-                            self.file_ops.copy(selected_path, target_dir)
-                            self.notify(f"Overwrote {selected_path.name} in {target_dir}")
-                            target_panel.refresh_view()
-                        except Exception as e:
-                            self.notify(f"Error overwriting: {str(e)}", severity="error")
-
-                self.app.push_screen(
-                    ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
-                    confirm_overwrite
-                )
-            except Exception as e:
-                self.notify(f"Error copying: {str(e)}", severity="error")
-            self._do_copy(selected_path, target_dir, target_panel)
-
-    @work(thread=True, exclusive=True)
-    def _do_copy(self, selected_path: Path, target_dir: Path, target_panel: FilePanel) -> None:
-        """Perform copy operation in a background thread."""
-        try:
-            self.file_ops.copy(selected_path, target_dir)
-            self.notify(f"Copied {selected_path.name} to {target_dir}")
-            target_panel.refresh_view()
-        except Exception as e:
-            self.notify(f"Error copying: {str(e)}", severity="error")
+        self._initiate_transfer("copy")
 
     def action_move(self) -> None:
         """Move selected file/directory."""
-        self._handle_transfer("move")
+        self._initiate_transfer("move")
 
-    def _handle_transfer(self, operation: str) -> None:
-        """Handle copy or move operation."""
+    def _initiate_transfer(self, operation: str) -> None:
+        """Initiate copy or move operation with checks."""
         active_panel = self.get_active_panel()
         selected_path = active_panel.get_selected_path()
 
@@ -188,56 +148,54 @@ class UserModeScreen(Screen):
 
         target_panel = self.get_inactive_panel()
         target_dir = target_panel.current_dir
+        target_path = target_dir / selected_path.name
 
-        # Define these before try to avoid UnboundLocalError in except block
-        op_ing = "copying" if operation == "copy" else "moving"
-        verb = "Copied" if operation == "copy" else "Moved"
+        if selected_path.resolve() == target_path.resolve():
+            self.notify(f"Source and destination are the same: {selected_path.name}", severity="warning")
+            return
 
-        try:
-            if operation == "copy":
-                self.file_ops.copy(selected_path, target_dir)
-            else:  # move
-                self.file_ops.move(selected_path, target_dir)
-                active_panel.refresh_view()
+        if target_path.exists():
+            def confirm_overwrite(confirmed: bool) -> None:
+                if confirmed:
+                    self._perform_transfer(operation, selected_path, target_dir, overwrite=True)
 
-            self.notify(f"{verb} {selected_path.name} to {target_dir}")
-            target_panel.refresh_view()
-        except Exception as e:
-            self.notify(f"Error {op_ing}: {str(e)}", severity="error")
-                self.notify(f"Moved {selected_path.name} to {target_dir}")
-                active_panel_widget.refresh_view()
-                target_panel.refresh_view()
-            except FileExistsError:
-                def confirm_overwrite(confirmed: bool) -> None:
-                    if confirmed:
-                        try:
-                            target_path = target_dir / selected_path.name
-                            self.file_ops.delete(target_path)
-                            self.file_ops.move(selected_path, target_dir)
-                            self.notify(f"Overwrote {selected_path.name} in {target_dir}")
-                            active_panel_widget.refresh_view()
-                            target_panel.refresh_view()
-                        except Exception as e:
-                            self.notify(f"Error overwriting: {str(e)}", severity="error")
-
-                self.app.push_screen(
-                    ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
-                    confirm_overwrite
-                )
-            except Exception as e:
-                self.notify(f"Error moving: {str(e)}", severity="error")
-            self._do_move(selected_path, target_dir, active_panel_widget, target_panel)
+            self.app.push_screen(
+                ConfirmationScreen(
+                    f"File {selected_path.name} exists. Overwrite?",
+                    confirm_label="Overwrite",
+                    confirm_variant="warning"
+                ),
+                confirm_overwrite
+            )
+        else:
+            self._perform_transfer(operation, selected_path, target_dir, overwrite=False)
 
     @work(thread=True, exclusive=True)
-    def _do_move(self, selected_path: Path, target_dir: Path, active_panel: FilePanel, target_panel: FilePanel) -> None:
-        """Perform move operation in a background thread."""
+    def _perform_transfer(self, operation: str, source: Path, destination: Path, overwrite: bool = False) -> None:
+        """Perform transfer operation in a background thread."""
         try:
-            self.file_ops.move(selected_path, target_dir)
-            self.notify(f"Moved {selected_path.name} to {target_dir}")
-            active_panel.refresh_view()
-            target_panel.refresh_view()
+            target_path = destination / source.name
+
+            if overwrite:
+                self.file_ops.delete(target_path)
+
+            if operation == "copy":
+                self.file_ops.copy(source, destination)
+                verb = "Copied"
+            else:
+                self.file_ops.move(source, destination)
+                verb = "Moved"
+
+            self.app.call_from_thread(self.notify, f"{verb} {source.name} to {destination}")
+
+            # Refresh panels
+            self.app.call_from_thread(lambda: self.get_inactive_panel().refresh_view())
+            if operation == "move":
+                self.app.call_from_thread(lambda: self.get_active_panel().refresh_view())
+
         except Exception as e:
-            self.notify(f"Error moving: {str(e)}", severity="error")
+            op_ing = "copying" if operation == "copy" else "moving"
+            self.app.call_from_thread(self.notify, f"Error {op_ing}: {str(e)}", severity="error")
 
     def action_delete(self) -> None:
         """Delete selected file/directory."""
