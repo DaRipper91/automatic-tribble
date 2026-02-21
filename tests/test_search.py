@@ -19,23 +19,22 @@ class TestSearchOptimization(unittest.TestCase):
 
     def test_search_split_boundary(self):
         # Create a file where the target string is likely to be split across chunks
-        # We will force a small chunk size in the implementation or just test with a large enough file
-        # But since I can't easily mock chunk size inside the method without modifying it,
-        # I will rely on the logic being correct for any chunk size.
-        # However, to be sure, I should test with a string that would definitely cross a 64KB boundary if I could control it.
-        # Instead, I'll trust the logic verification I did.
-
-        # But I can create a scenario that verifies "search works" generally.
+        # Chunk size is 1MB = 1048576 bytes
 
         filename = self.test_dir / "split_test.txt"
         target = "SEARCH_TARGET"
-        padding = "x" * (64 * 1024 - 5) # 64KB - 5 chars
+        chunk_size = 1048576
 
-        # This puts "SEARCH_TARGET" starting at index 65531.
-        # If chunk size is 64KB (65536), the first chunk will end at 65536.
+        # Position the target so it crosses the 1MB boundary
+        # We put 1048570 bytes of padding.
+        # Boundary is at 1048576.
+        # Target starts at 1048570.
         # "SEARCH_TARGET" is 13 chars.
-        # It spans from 65531 to 65544.
-        # So it is split: "SEARCH" (6 chars) in chunk 1, "_TARGET" (7 chars) in chunk 2.
+        # 1048570 + 13 = 1048583.
+        # So it crosses from chunk 1 to chunk 2.
+
+        padding_len = chunk_size - 6 # Leave 6 chars in first chunk
+        padding = "x" * padding_len
 
         with open(filename, "w") as f:
             f.write(padding)

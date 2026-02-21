@@ -60,10 +60,13 @@ class FileSearcher:
         Search for files containing specific text.
         """
         results = []
-        
-        # Determine case sensitivity for the search text once
         search_term = search_text if case_sensitive else search_text.lower()
-        
+        search_len = len(search_term)
+        if search_len == 0:
+            return []
+
+        chunk_size = 1024 * 1024 # 1MB
+
         try:
             # We use os.walk here as it is convenient for simple iteration where we need root
             for root, _, files in os.walk(directory):
@@ -76,13 +79,34 @@ class FileSearcher:
                         if self._is_text_file(file_path):
                             try:
                                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                                    # Simple line-by-line search for now
-                                    for line in f:
-                                        if not case_sensitive:
-                                            line = line.lower()
-                                        if search_term in line:
+                                    overlap = ""
+                                    while True:
+                                        chunk = f.read(chunk_size)
+                                        if not chunk:
+                                            break
+
+                                        search_chunk = chunk if case_sensitive else chunk.lower()
+
+                                        if search_term in search_chunk:
                                             results.append(file_path)
                                             break
+
+                                        # Check boundary
+                                        if overlap:
+                                            # Combine overlap from previous chunk with start of current chunk
+                                            # We only need enough from current chunk to complete a potential match starting in overlap
+                                            boundary = overlap + search_chunk[:search_len - 1]
+                                            if search_term in boundary:
+                                                results.append(file_path)
+                                                break
+
+                                        # Update overlap for next iteration
+                                        # We need the last (search_len - 1) chars from the current chunk
+                                        if len(search_chunk) >= search_len - 1:
+                                            overlap = search_chunk[-(search_len - 1):]
+                                        else:
+                                            # If chunk is tiny, append to overlap
+                                            overlap += search_chunk
                             except (IOError, OSError):
                                 continue
         except (PermissionError, OSError):
