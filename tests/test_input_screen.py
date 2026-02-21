@@ -14,6 +14,15 @@ async def test_input_screen_composition():
         screen = InputScreen("Test Title", "Test Message", "Initial")
         await app.push_screen(screen)
 
+        # Check title
+        title = screen.query_one(".title", Label)
+        assert str(title.render()) == "Test Title"
+
+        # Check message
+        message = screen.query_one("#message", Label)
+        assert str(message.render()) == "Test Message"
+        await app.push_screen(screen)
+
         # Check title and message
         title = screen.query_one(".title", Label)
         assert str(title.render()) == "Test Title"
@@ -38,9 +47,14 @@ async def test_input_screen_composition():
         assert str(ok_btn.label) == "OK"
         assert str(cancel_btn.label) == "Cancel"
 
+        # Check variants (new InputScreen uses success/primary vs old error/primary)
+        assert ok_btn.variant == "success"
+        assert cancel_btn.variant == "primary"
+
         # Test OK button
         input_widget.value = "New Value"
         await pilot.click("#ok")
+        # Assert screen is dismissed (by checking app.screen is not this screen)
         assert app.screen is not screen
 
 @pytest.mark.asyncio
@@ -53,6 +67,11 @@ async def test_input_screen_cancel():
         result = res
 
     async with app.run_test() as pilot:
+        screen = InputScreen("Title", "Message")
+        await app.push_screen(screen, handle_result)
+
+        await pilot.click("#cancel")
+        assert result == "" # Cancel returns empty string in new InputScreen logic
         screen = InputScreen("Test Title", "Test Message")
         await app.push_screen(screen, handle_result)
 
@@ -76,6 +95,7 @@ async def test_input_screen_submit():
         result = res
 
     async with app.run_test() as pilot:
+        screen = InputScreen("Title", "Message")
         screen = InputScreen("Test Title", "Test Message")
         screen = InputScreen("Test Title", "Test Prompt")
         await app.push_screen(screen, handle_result)

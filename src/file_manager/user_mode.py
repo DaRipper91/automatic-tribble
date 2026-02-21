@@ -99,7 +99,7 @@ class UserModeScreen(Screen):
                     id="paths-info"
                 )
                 yield Label(
-                    "Tab: Switch | C: Copy | M: Move | D: Delete | N: New Dir | R: Rename | Esc: Back",
+                    "Tab: Switch | C: Copy | M: Move | D: Delete | N: New Dir | R: Rename | H: Help | Esc: Back",
                     id="help-text"
                 )
 

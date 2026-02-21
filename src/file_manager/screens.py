@@ -2,7 +2,6 @@
 Screens for the file manager application.
 """
 
-from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Static, Log, ProgressBar
