@@ -180,7 +180,7 @@ class FileOperations:
         total = 0
         try:
             # Use iterative stack approach to avoid recursion limits
-            stack = [str(path)]
+            stack = [str(directory)]
             while stack:
                 current_dir = stack.pop()
                 try:
