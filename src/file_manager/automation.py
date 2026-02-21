@@ -289,6 +289,9 @@ class FileOrganizer:
         Returns:
             List of renamed file paths
         """
+        if not pattern:
+            raise ValueError("Pattern cannot be empty")
+
         renamed_files = []
         
         if recursive:
