@@ -80,3 +80,71 @@ def test_rename_traversal(test_env):
 
     stolen_file = secret_dir / "stolen_rename.txt"
     assert not stolen_file.exists(), "Vulnerability: File was moved out via FileOperations.rename"
+
+def test_batch_rename_overwrite_prevention(test_env):
+    organizer = FileOrganizer()
+    source = test_env["source"]
+
+    # Create two files
+    file_a = source / "file_a.txt"
+    file_b = source / "file_b.txt"
+
+    file_a.write_text("content A")
+    file_b.write_text("content B")
+
+    # Try to rename file_a to file_b
+    organizer.batch_rename(source, "a", "b")
+
+    # Verify file_b still has its original content and file_a still exists
+    assert file_b.read_text() == "content B", "Security: batch_rename should not overwrite existing files"
+    assert file_a.exists(), "Security: file_a should still exist because rename should have been skipped"
+
+def test_organize_by_type_overwrite_prevention(test_env):
+    organizer = FileOrganizer()
+    source = test_env["source"]
+    target = test_env["target"]
+
+    # Create an image in source
+    img_file = source / "image.jpg"
+    img_file.write_text("source image")
+
+    # Create same-named file in target/images
+    images_dir = target / "images"
+    images_dir.mkdir(parents=True, exist_ok=True)
+    existing_file = images_dir / "image.jpg"
+    existing_file.write_text("existing target")
+
+    # Organize
+    organizer.organize_by_type(source, target, move=True)
+
+    # Verify existing file was NOT overwritten
+    assert existing_file.read_text() == "existing target", "Security: organize_by_type should not overwrite existing files"
+    # Source file should still exist because it wasn't moved
+    assert img_file.exists(), "Security: source file should still exist because move was skipped"
+
+def test_organize_by_date_overwrite_prevention(test_env):
+    organizer = FileOrganizer()
+    source = test_env["source"]
+    target = test_env["target"]
+
+    # Create a file in source
+    file_a = source / "file.txt"
+    file_a.write_text("source content")
+
+    # Mock date directory (we'll use a fixed date format for testing)
+    from datetime import datetime
+    mtime = file_a.stat().st_mtime
+    date_str = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d")
+
+    date_dir = target / date_str
+    date_dir.mkdir(parents=True, exist_ok=True)
+    existing_file = date_dir / "file.txt"
+    existing_file.write_text("existing content")
+
+    # Organize
+    organizer.organize_by_date(source, target, date_format="%Y-%m-%d", move=True)
+
+    # Verify existing file was NOT overwritten
+    assert existing_file.read_text() == "existing content", "Security: organize_by_date should not overwrite existing files"
+    # Source file should still exist
+    assert file_a.exists(), "Security: source file should still exist because move was skipped"
