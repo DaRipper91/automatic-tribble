@@ -63,5 +63,53 @@ class TestSearchOptimization(unittest.TestCase):
         results = self.searcher.search_by_content(self.test_dir, "missing")
         self.assertEqual(len(results), 0)
 
+    def test_search_unknown_extension_text(self):
+        # File with unknown extension, but text content
+        filename = self.test_dir / "unknown.foo"
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("This is some text content that should be found.")
+
+        results = self.searcher.search_by_content(self.test_dir, "content")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0], filename)
+
+    def test_search_unknown_extension_binary(self):
+        # File with unknown extension, binary content
+        filename = self.test_dir / "unknown.bin"
+        with open(filename, "wb") as f:
+            # Null byte makes it binary
+            f.write(b"This is binary content \x00 that should be skipped.")
+
+        # Even if we search for "content", it should be skipped because of null byte
+        results = self.searcher.search_by_content(self.test_dir, "content")
+        self.assertEqual(len(results), 0)
+
+    def test_search_known_extension_text(self):
+        # File with known extension
+        filename = self.test_dir / "known.txt"
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write("This is some text content in a txt file.")
+
+        results = self.searcher.search_by_content(self.test_dir, "content")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0], filename)
+
+    def test_search_known_extension_binary_content(self):
+        # File with known extension but binary content (e.g. utf-16 or just bad usage)
+        # The current implementation opens known extensions as text with errors='ignore'.
+        # So it might find strings if they appear in between binary data,
+        # or if it's just a text file with a null byte.
+        # It should be found because known extensions bypass the binary check.
+
+        filename = self.test_dir / "lying.txt"
+        with open(filename, "wb") as f:
+            f.write(b"content \x00 more content")
+
+        # "content" is in there. Open as text (ignore errors) will read "content \x00 more content".
+        # It should be found.
+        results = self.searcher.search_by_content(self.test_dir, "content")
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0], filename)
+
 if __name__ == "__main__":
     unittest.main()
