@@ -193,8 +193,11 @@ class UserModeScreen(Screen):
             else:
                 self._background_move(selected_path, target_dir, active_panel_widget, target_panel)
 
-    @work(thread=True)
+    @work(thread=True, name="move_worker")
     def _background_move(self, source: Path, destination: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
+        """
+        Perform move operation in a background thread to prevent UI blocking.
+        """
         try:
             self.file_ops.move(source, destination)
             self.app.call_from_thread(self.notify, f"Moved {source.name} to {destination}")
@@ -203,8 +206,11 @@ class UserModeScreen(Screen):
         except Exception as e:
             self.app.call_from_thread(self.notify, f"Error moving: {str(e)}", severity="error")
 
-    @work(thread=True)
+    @work(thread=True, name="move_overwrite_worker")
     def _background_move_overwrite(self, source: Path, destination: Path, target_path: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
+        """
+        Perform overwrite move operation in a background thread to prevent UI blocking.
+        """
         try:
             self.file_ops.delete(target_path)
             self.file_ops.move(source, destination)
