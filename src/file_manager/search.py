@@ -43,7 +43,27 @@ class FileSearcher:
             pattern = pattern.lower()
         
         try:
+            def process_entry(entry):
+                name = entry.name
+                if not case_sensitive:
+                    name = name.lower()
+
+                if fnmatch.fnmatch(name, pattern):
+                    results.append(Path(entry.path))
+
             if recursive:
+                for entry in self._scan_all_recursive(directory):
+                    process_entry(entry)
+            else:
+                # Non-recursive search
+                try:
+                    with os.scandir(directory) as entries:
+                        for entry in entries:
+                            process_entry(entry)
+                except OSError:
+                    pass
+
+        except (PermissionError, OSError):
                 # Use recursive scanner
                 entries = self._scan_recursive(directory)
                 for entry in entries:
@@ -209,6 +229,17 @@ class FileSearcher:
                     yield entry
                     if entry.is_dir(follow_symlinks=False):
                         yield from self._scan_recursive(entry.path)
+        except (PermissionError, OSError):
+            pass
+
+    def _scan_all_recursive(self, directory: Union[Path, str]):
+        """Recursively scan directory using os.scandir, yielding all entries."""
+        try:
+            with os.scandir(directory) as it:
+                for entry in it:
+                    yield entry
+                    if entry.is_dir(follow_symlinks=False):
+                        yield from self._scan_all_recursive(entry.path)
         except (PermissionError, OSError):
             pass
     
