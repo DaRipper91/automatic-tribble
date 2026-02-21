@@ -162,6 +162,11 @@ class UserModeConfigScreen(ModalScreen[str]):
     }
     """
 
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss(None)
+
     def compose(self) -> ComposeResult:
         with Container(id="config-dialog"):
             yield Label("Select Layout", classes="title")
@@ -435,6 +440,12 @@ class ConfirmationScreen(ModalScreen[bool]):
     }
     """
 
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss(False)
+
+    def __init__(self, message: str):
     def __init__(self, message: str, confirm_label: str = "Delete", confirm_variant: str = "error"):
         super().__init__()
         self.message = message
@@ -590,6 +601,11 @@ class InputScreen(ModalScreen[str]):
         width: 1fr;
     }
     """
+
+    BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
+
+    def action_dismiss(self) -> None:
+        self.dismiss("")
 
     def __init__(self, title: str, message: str, initial_value: str = ""):
         super().__init__()

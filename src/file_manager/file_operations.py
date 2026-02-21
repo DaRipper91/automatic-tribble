@@ -10,28 +10,61 @@ from typing import Union
 
 class FileOperations:
     """Handles file and directory operations."""
-    
+
+    def _validate_transfer(self, source: Path, destination: Path) -> Path:
+        """
+        Validate source and destination for copy/move operations.
+        
+        Args:
+            source: Source Path object
+            destination: Destination Path object
+
+        Returns:
+            Target Path object (destination / source.name)
+
+        Raises:
+            FileNotFoundError: If source does not exist
+            NotADirectoryError: If destination is not a directory
+            FileExistsError: If target already exists
+        """
+        if not source.exists():
+            raise FileNotFoundError(f"Source does not exist: {source}")
+
+        if not destination.is_dir():
+            raise NotADirectoryError(f"Destination is not a directory: {destination}")
+
+        target = destination / source.name
+
+        if target.exists():
+            raise FileExistsError(f"Destination already exists: {target}")
+
+        return target
+
+    def _ensure_path_exists(self, path: Path, message: str = "Path does not exist") -> None:
+        """
+        Ensure that a path exists, otherwise raise FileNotFoundError.
+
+        Args:
+            path: Path object to check
+            message: Custom error message prefix
+
+        Raises:
+            FileNotFoundError: If path does not exist
+        """
+        if not path.exists():
+            raise FileNotFoundError(f"{message}: {path}")
+
     def copy(self, source: Union[str, Path], destination: Union[str, Path]) -> None:
         """
         Copy a file or directory to a destination.
-        
+
         Args:
             source: Source file or directory path
             destination: Destination directory path
         """
         source = Path(source)
         destination = Path(destination)
-        
-        if not source.exists():
-            raise FileNotFoundError(f"Source does not exist: {source}")
-        
-        if not destination.is_dir():
-            raise NotADirectoryError(f"Destination is not a directory: {destination}")
-        
-        target = destination / source.name
-        
-        if target.exists():
-            raise FileExistsError(f"Destination already exists: {target}")
+        target = self._validate_transfer(source, destination)
 
         if source.is_file():
             shutil.copy2(source, target)
@@ -48,17 +81,7 @@ class FileOperations:
         """
         source = Path(source)
         destination = Path(destination)
-        
-        if not source.exists():
-            raise FileNotFoundError(f"Source does not exist: {source}")
-        
-        if not destination.is_dir():
-            raise NotADirectoryError(f"Destination is not a directory: {destination}")
-        
-        target = destination / source.name
-
-        if target.exists():
-            raise FileExistsError(f"Destination already exists: {target}")
+        target = self._validate_transfer(source, destination)
 
         shutil.move(str(source), str(target))
     
@@ -70,9 +93,7 @@ class FileOperations:
             path: Path to file or directory to delete
         """
         path = Path(path)
-        
-        if not path.exists():
-            raise FileNotFoundError(f"Path does not exist: {path}")
+        self._ensure_path_exists(path)
         
         if path.is_file():
             path.unlink()
@@ -98,9 +119,7 @@ class FileOperations:
             new_name: New name (not full path)
         """
         old_path = Path(old_path)
-        
-        if not old_path.exists():
-            raise FileNotFoundError(f"Path does not exist: {old_path}")
+        self._ensure_path_exists(old_path)
         
         # Secure against path traversal
         if any(sep in new_name for sep in [os.sep, os.altsep] if sep) or new_name in ('.', '..'):
