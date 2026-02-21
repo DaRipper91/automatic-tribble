@@ -65,26 +65,39 @@ class FileSearcher:
         search_term = search_text if case_sensitive else search_text.lower()
         
         try:
-            # We use os.walk here as it is convenient for simple iteration where we need root
-            for root, _, files in os.walk(directory):
-                root_path = Path(root)
-                
-                for file_name in files:
-                    if fnmatch.fnmatch(file_name, file_pattern):
-                        file_path = root_path / file_name
-                        
-                        if self._is_text_file(file_path):
+            stack = [str(directory)]
+            while stack:
+                current_dir = stack.pop()
+                try:
+                    with os.scandir(current_dir) as it:
+                        for entry in it:
                             try:
-                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                                    # Simple line-by-line search for now
-                                    for line in f:
-                                        if not case_sensitive:
-                                            line = line.lower()
-                                        if search_term in line:
-                                            results.append(file_path)
-                                            break
-                            except (IOError, OSError):
+                                if entry.is_dir(follow_symlinks=False):
+                                    stack.append(entry.path)
+                                    continue
+
+                                if not entry.is_file():
+                                    continue
+
+                                if fnmatch.fnmatch(entry.name, file_pattern):
+                                    file_path = Path(entry.path)
+
+                                    if self._is_text_file(file_path):
+                                        try:
+                                            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                                # Simple line-by-line search for now
+                                                for line in f:
+                                                    if not case_sensitive:
+                                                        line = line.lower()
+                                                    if search_term in line:
+                                                        results.append(file_path)
+                                                        break
+                                        except (IOError, OSError):
+                                            continue
+                            except OSError:
                                 continue
+                except (PermissionError, OSError):
+                    pass
         except (PermissionError, OSError):
             pass
         
