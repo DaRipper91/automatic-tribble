@@ -333,7 +333,7 @@ class AIConfigScreen(Screen):
                     log.write_line("[yellow]Command cancelled.[/]")
 
             self.app.push_screen(
-                ConfirmationScreen(f"Execute command:\n{command}?"),
+                ConfirmationScreen(f"Execute command:\n{command}?", confirm_label="Execute", confirm_variant="success"),
                 check_confirm
             )
         else:
@@ -405,6 +405,8 @@ class ProgressScreen(ModalScreen):
 class ConfirmationScreen(ModalScreen[bool]):
     """Screen for confirming actions."""
 
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
     CSS = """
     ConfirmationScreen {
         align: center middle;
@@ -444,21 +446,27 @@ class ConfirmationScreen(ModalScreen[bool]):
         self.dismiss(False)
 
     def __init__(self, message: str):
+    def __init__(self, message: str, confirm_label: str = "Delete", confirm_variant: str = "error"):
         super().__init__()
         self.message = message
+        self.confirm_label = confirm_label
+        self.confirm_variant = confirm_variant
 
     def compose(self) -> ComposeResult:
         with Container(id="dialog"):
             yield Label(self.message, id="question")
             with Horizontal(id="buttons"):
                 yield Button("Cancel", variant="primary", id="cancel")
-                yield Button("Delete", variant="error", id="confirm")
+                yield Button(self.confirm_label, variant=self.confirm_variant, id="confirm")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":
             self.dismiss(True)
         else:
             self.dismiss(False)
+
+    def action_cancel(self):
+        self.dismiss(False)
 
 
 
@@ -547,6 +555,8 @@ class HelpScreen(ModalScreen):
 class InputScreen(ModalScreen[str]):
     """Screen for getting text input from the user."""
 
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
     CSS = """
     InputScreen {
         align: center middle;
@@ -620,3 +630,6 @@ class InputScreen(ModalScreen[str]):
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         self.dismiss(event.value)
+
+    def action_cancel(self):
+        self.dismiss("")

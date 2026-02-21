@@ -9,6 +9,7 @@ from textual.widgets import Header, Footer, Label
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
+from textual.worker import work
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
@@ -160,6 +161,17 @@ class UserModeScreen(Screen):
                 )
             except Exception as e:
                 self.notify(f"Error copying: {str(e)}", severity="error")
+            self._do_copy(selected_path, target_dir, target_panel)
+
+    @work(thread=True, exclusive=True)
+    def _do_copy(self, selected_path: Path, target_dir: Path, target_panel: FilePanel) -> None:
+        """Perform copy operation in a background thread."""
+        try:
+            self.file_ops.copy(selected_path, target_dir)
+            self.notify(f"Copied {selected_path.name} to {target_dir}")
+            target_panel.refresh_view()
+        except Exception as e:
+            self.notify(f"Error copying: {str(e)}", severity="error")
 
     def action_move(self) -> None:
         """Move selected file/directory."""
@@ -194,6 +206,18 @@ class UserModeScreen(Screen):
                 )
             except Exception as e:
                 self.notify(f"Error moving: {str(e)}", severity="error")
+            self._do_move(selected_path, target_dir, active_panel_widget, target_panel)
+
+    @work(thread=True, exclusive=True)
+    def _do_move(self, selected_path: Path, target_dir: Path, active_panel: FilePanel, target_panel: FilePanel) -> None:
+        """Perform move operation in a background thread."""
+        try:
+            self.file_ops.move(selected_path, target_dir)
+            self.notify(f"Moved {selected_path.name} to {target_dir}")
+            active_panel.refresh_view()
+            target_panel.refresh_view()
+        except Exception as e:
+            self.notify(f"Error moving: {str(e)}", severity="error")
 
     def action_delete(self) -> None:
         """Delete selected file/directory."""
@@ -203,16 +227,29 @@ class UserModeScreen(Screen):
         if selected_path:
             def check_confirm(confirmed: bool) -> None:
                 if confirmed:
-                    try:
-                        self.file_ops.delete(selected_path)
-                        self.notify(f"Deleted {selected_path.name}")
-                        active_panel_widget.refresh_view()
-                    except Exception as e:
-                        self.notify(f"Error deleting: {str(e)}", severity="error")
+                    # Run deletion in a worker thread to keep UI responsive
+                    self.run_worker(
+                        lambda: self._perform_delete(selected_path, active_panel_widget),
+                        thread=True,
+                        name=f"delete-{selected_path.name}"
+                    )
 
             self.app.push_screen(
                 ConfirmationScreen(f"Are you sure you want to delete {selected_path.name}?"),
                 check_confirm
+            )
+
+    def _perform_delete(self, path, panel) -> None:
+        """Background task to perform deletion."""
+        try:
+            self.file_ops.delete(path)
+            self.app.call_from_thread(self.notify, f"Deleted {path.name}")
+            self.app.call_from_thread(panel.refresh_view)
+        except Exception as e:
+            self.app.call_from_thread(
+                self.notify,
+                f"Error deleting: {str(e)}",
+                severity="error"
             )
 
     def action_new_dir(self) -> None:

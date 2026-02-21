@@ -1,6 +1,6 @@
 import pytest
 from textual.app import App, ComposeResult
-from src.file_manager.screens import HelpScreen, InputScreen
+from src.file_manager.screens import HelpScreen, InputScreen, ConfirmationScreen
 from textual.widgets import Label, Button, Input
 
 class HeadlessApp(App):
@@ -83,4 +83,43 @@ async def test_input_screen_submit():
         input_widget = screen.query_one(Input)
         input_widget.value = "submitted"
         await pilot.press("enter")
+        assert app.screen is not screen
+
+@pytest.mark.asyncio
+async def test_confirmation_screen_default():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = ConfirmationScreen("Are you sure?")
+        await app.push_screen(screen)
+
+        confirm_btn = screen.query_one("#confirm", Button)
+        assert str(confirm_btn.label) == "Delete"
+        assert confirm_btn.variant == "error"
+
+@pytest.mark.asyncio
+async def test_confirmation_screen_custom():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = ConfirmationScreen("Execute?", confirm_label="Execute", confirm_variant="success")
+        await app.push_screen(screen)
+
+        confirm_btn = screen.query_one("#confirm", Button)
+        assert str(confirm_btn.label) == "Execute"
+        assert confirm_btn.variant == "success"
+
+@pytest.mark.asyncio
+async def test_confirmation_screen_escape():
+    app = HeadlessApp()
+    result = None
+
+    def handle_result(res):
+        nonlocal result
+        result = res
+
+    async with app.run_test() as pilot:
+        screen = ConfirmationScreen("Are you sure?")
+        await app.push_screen(screen, handle_result)
+
+        await pilot.press("escape")
+        assert result is False
         assert app.screen is not screen

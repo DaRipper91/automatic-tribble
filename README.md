@@ -1,89 +1,74 @@
-# 🚀 TFM: The Future Manager
+# TFM (The Future Manager) File Manager
 
-![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
-![TUI](https://img.shields.io/badge/TUI-Textual-green)
-![AI Powered](https://img.shields.io/badge/AI-Gemini-purple)
+## Introduction
+TFM is an innovative file manager application designed to simplify and enhance file management tasks. It combines a robust interactive text-based user interface (TUI) with advanced AI automation capabilities, making file operations intuitive and efficient.
 
-**The Next-Gen File Manager for your Terminal.**
+## Features
+- **Interactive TUI**: Navigate and manage files using a user-friendly terminal interface.
+- **AI Automation**: Utilize AI to automate repetitive file management tasks.
+- **Multi-Platform Support**: Runs seamlessly on various operating systems, including Windows, macOS, and Linux.
+- **Customization**: Configure settings and preferences to suit individual workflows.
+- **File Operations**: Fast and reliable file copying, moving, renaming, and deleting.
+- **Search Functionality**: Quick search feature to locate files easily.
+- **Scripting Support**: Support for custom scripts to extend functionality.
 
-TFM combines a robust Dual-Pane File Manager with powerful AI Automation. Whether you need precise control or intelligent batch operations, TFM adapts to your workflow.
+## Installation
+To install TFM, follow these steps:
+1. **Clone the repository**:  
+   ```bash
+   git clone https://github.com/DaRipper91/automatic-tribble.git
+   cd automatic-tribble
+   ```  
+2. **Install dependencies**:  
+   ```bash
+   pip install -r requirements.txt
+   ```  
+3. **Run the application**:  
+   ```bash
+   python main.py
+   ```
 
-📘 **Full User Manual:** See [USER_MANUAL.md](USER_MANUAL.md) for a deep, sectioned guide to installation, usage, automation, and troubleshooting.
+## Usage
+After installation, you can launch TFM by running `python main.py`. 
 
-## ✨ Key Features
+### Basic Commands
+- `list`: Display files in the current directory.
+- `move <source> <destination>`: Move files from the source to the destination.
+- `copy <source> <destination>`: Copy files from the source to the destination.
+- `delete <filename>`: Delete the specified file.
 
-### 🤖 AI Mode (New!)
-Harness the power of Google Gemini directly in your terminal.
-- **Natural Language Commands**: "Organize my downloads by date", "Find all PDF files"
-- **Intelligent Automation**: Let AI generate the complex shell commands for you.
-- **Chat Integration**: Ask questions about your files or get help.
+For a full list of commands, type `help` within the application.
 
-### 🖥️ User Mode
-A flexible, keyboard-driven interface.
-- **Dual Pane**: Classic Norton Commander style for efficient file transfers.
-- **Single Pane**: Focused view with **Dynamic Split**—automatically opens a second panel when you Copy or Move files!
-- **Fast & Responsive**: Built with Textual for a modern, lag-free experience.
+## Architecture
+TFM is structured in a modular way:
+- **Core Module**: Handles the main functionalities of TFM.
+- **TUI Module**: Responsible for rendering the user interface and user interactions.
+- **AI Module**: Implements automation capabilities and intelligent suggestions.
 
-## 📦 Installation
+This structure allows for easy scalability and maintenance.
 
-### Prerequisites
-- Python 3.8+
-- [Gemini CLI](https://geminicli.com) (Optional, for AI features)
+## Contribution Guidelines
+We welcome contributions! To contribute:
+1. Fork the repository.
+2. Create your feature branch:  
+   ```bash
+   git checkout -b feature/YourFeature
+   ```
+3. Commit your changes:  
+   ```bash
+   git commit -m 'Add some feature'
+   ```
+4. Push to the branch:  
+   ```bash
+   git push origin feature/YourFeature
+   ```
+5. Open a pull request.
 
-### Quick Start
+Please ensure your code adheres to the project's coding standards.
 
-```bash
-# Clone the repository
-git clone https://github.com/DaRipper91/automatic-tribble.git
-cd automatic-tribble
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run TFM
-python run.py
-```
-
-### 🧠 Setting up AI Mode
-To unlock the full potential of AI Mode, install the Gemini CLI:
-
-**For Termux / Android:**
-```bash
-npm install -g @mmbuto/gemini-cli-termux
-```
-
-**For Desktop / Server:**
-```bash
-npm install -g @google/gemini-cli
-```
-*Ensure `gemini` is in your PATH and authenticated.*
-
-## 🎮 Controls
-
-| Key | Action |
-|-----|--------|
-| `Tab` | Switch Panel |
-| `C` | Copy (Dynamic Split in Single Mode!) |
-| `M` | Move (Dynamic Split in Single Mode!) |
-| `D` | Delete |
-| `N` | New Directory |
-| `R` | Rename |
-| `Q` | Quit |
-
-## 🛠️ Architecture
-
-TFM is built with modularity in mind:
-- **`app.py`**: The core TUI application.
-- **`screens.py`**: Modular screens (Launcher, Config, AI Console).
-- **`ai_utils.py`**: Bridge to the Gemini CLI.
-- **`file_operations.py`**: Thread-safe file management.
-
-## 🤝 Contributing
-
-Join us in building the future of terminal file management! PRs are welcome.
+## License
+TFM is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
 
 ---
-*Built with ❤️ and Python.*
 
-## 🤖 AI-Ready
-This repo adheres to the Repomix standard. Run `repomix` to pack the codebase for LLM context.
+For further information, feedback, or issues, please reach out via GitHub issues or contact us directly.
