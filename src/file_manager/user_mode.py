@@ -9,7 +9,7 @@ from textual.widgets import Header, Footer, Label
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
-from textual.worker import work
+from textual import work
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel
@@ -202,31 +202,25 @@ class UserModeScreen(Screen):
 
             self.notify(f"{verb} {selected_path.name} to {target_dir}")
             target_panel.refresh_view()
-        except Exception as e:
-            self.notify(f"Error {op_ing}: {str(e)}", severity="error")
-                self.notify(f"Moved {selected_path.name} to {target_dir}")
-                active_panel_widget.refresh_view()
-                target_panel.refresh_view()
-            except FileExistsError:
-                def confirm_overwrite(confirmed: bool) -> None:
-                    if confirmed:
-                        try:
-                            target_path = target_dir / selected_path.name
-                            self.file_ops.delete(target_path)
-                            self.file_ops.move(selected_path, target_dir)
-                            self.notify(f"Overwrote {selected_path.name} in {target_dir}")
-                            active_panel_widget.refresh_view()
-                            target_panel.refresh_view()
-                        except Exception as e:
-                            self.notify(f"Error overwriting: {str(e)}", severity="error")
+        except FileExistsError:
+            def confirm_overwrite(confirmed: bool) -> None:
+                if confirmed:
+                    try:
+                        target_path = target_dir / selected_path.name
+                        self.file_ops.delete(target_path)
+                        self.file_ops.move(selected_path, target_dir)
+                        self.notify(f"Overwrote {selected_path.name} in {target_dir}")
+                        active_panel_widget.refresh_view()
+                        target_panel.refresh_view()
+                    except Exception as e:
+                        self.notify(f"Error overwriting: {str(e)}", severity="error")
 
-                self.app.push_screen(
-                    ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
-                    confirm_overwrite
-                )
-            except Exception as e:
-                self.notify(f"Error moving: {str(e)}", severity="error")
-            self._do_move(selected_path, target_dir, active_panel_widget, target_panel)
+            self.app.push_screen(
+                ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
+                confirm_overwrite
+            )
+        except Exception as e:
+            self.notify(f"Error moving: {str(e)}", severity="error")
 
     @work(thread=True, exclusive=True)
     def _do_move(self, selected_path: Path, target_dir: Path, active_panel: FilePanel, target_panel: FilePanel) -> None:

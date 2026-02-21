@@ -177,30 +177,6 @@ class FileOperations:
             except OSError:
                 pass
 
-        total = 0
-        try:
-            # Use iterative stack approach to avoid recursion limits
-            stack = [str(path)]
-            while stack:
-                current_dir = stack.pop()
-                try:
-                    # os.scandir is faster than Path.rglob as it avoids Path object creation
-                    with os.scandir(current_dir) as it:
-                        for entry in it:
-                            try:
-                                # Don't follow symlinks for directories to avoid infinite loops
-                                if entry.is_dir(follow_symlinks=False):
-                                    stack.append(entry.path)
-                                # Count files and symlinks to files
-                                elif entry.is_file(follow_symlinks=True):
-                                    total += entry.stat(follow_symlinks=True).st_size
-                            except OSError:
-                                continue
-                except OSError:
-                    continue
-        except OSError:
-            pass
-
         return total
     
     @staticmethod
