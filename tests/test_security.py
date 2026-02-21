@@ -80,3 +80,21 @@ def test_rename_traversal(test_env):
 
     stolen_file = secret_dir / "stolen_rename.txt"
     assert not stolen_file.exists(), "Vulnerability: File was moved out via FileOperations.rename"
+
+def test_batch_rename_overwrite_prevention(test_env):
+    organizer = FileOrganizer()
+    source = test_env["source"]
+
+    # Create two files
+    file_a = source / "file_a.txt"
+    file_b = source / "file_b.txt"
+
+    file_a.write_text("content A")
+    file_b.write_text("content B")
+
+    # Try to rename file_a to file_b
+    organizer.batch_rename(source, "a", "b")
+
+    # Verify file_b still has its original content and file_a still exists
+    assert file_b.read_text() == "content B", "Security: batch_rename should not overwrite existing files"
+    assert file_a.exists(), "Security: file_a should still exist because rename should have been skipped"
