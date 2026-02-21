@@ -96,6 +96,10 @@ async def test_confirmation_screen_custom_labels():
         assert str(screen.query_one("#question", Label).render()) == "Confirm Action?"
 
         # Check buttons
+        confirm_btn = screen.query_one("#confirm", Button)
+        assert str(confirm_btn.label) == "Execute"
+
+@pytest.mark.asyncio
 async def test_confirmation_screen_default():
     app = HeadlessApp()
     async with app.run_test() as pilot:
