@@ -43,27 +43,49 @@ class FileSearcher:
             pattern = pattern.lower()
         
         try:
+            def process_entry(entry):
+                name = entry.name
+                if not case_sensitive:
+                    name = name.lower()
+
+                if fnmatch.fnmatch(name, pattern):
+                    results.append(Path(entry.path))
+
             if recursive:
-                for root, dirs, files in os.walk(directory):
-                    root_path = Path(root)
-                    
-                    # Check directories
-                    for dir_name in dirs:
-                        name = dir_name if case_sensitive else dir_name.lower()
-                        if fnmatch.fnmatch(name, pattern):
-                            results.append(root_path / dir_name)
-                    
-                    # Check files
-                    for file_name in files:
-                        name = file_name if case_sensitive else file_name.lower()
-                        if fnmatch.fnmatch(name, pattern):
-                            results.append(root_path / file_name)
+                for entry in self._scan_all_recursive(directory):
+                    process_entry(entry)
             else:
                 # Non-recursive search
-                for item in directory.iterdir():
-                    name = item.name if case_sensitive else item.name.lower()
-                    if fnmatch.fnmatch(name, pattern):
-                        results.append(item)
+                try:
+                    with os.scandir(directory) as entries:
+                        for entry in entries:
+                            process_entry(entry)
+                except OSError:
+                    pass
+
+        except (PermissionError, OSError):
+                # Use recursive scanner
+                entries = self._scan_recursive(directory)
+                for entry in entries:
+                    try:
+                        name = entry.name if case_sensitive else entry.name.lower()
+                        if fnmatch.fnmatch(name, pattern):
+                            results.append(Path(entry.path))
+                    except OSError:
+                        continue
+            else:
+                # Non-recursive search
+                try:
+                    with os.scandir(directory) as it:
+                        for entry in it:
+                            try:
+                                name = entry.name if case_sensitive else entry.name.lower()
+                                if fnmatch.fnmatch(name, pattern):
+                                    results.append(Path(entry.path))
+                            except OSError:
+                                continue
+                except OSError:
+                    pass
         except PermissionError:
             # Skip directories we don't have permission to read
             pass
@@ -177,6 +199,9 @@ class FileSearcher:
 
             for entry in entries:
                 try:
+                    if not entry.is_file(follow_symlinks=True):
+                        continue
+
                     # DirEntry.stat() is cached on Windows and faster than Path.stat() generally
                     # Also avoids creating Path object until we know it matches
                     size = entry.stat().st_size
@@ -201,10 +226,20 @@ class FileSearcher:
         try:
             with os.scandir(directory) as it:
                 for entry in it:
+                    yield entry
                     if entry.is_dir(follow_symlinks=False):
                         yield from self._scan_recursive(entry.path)
-                    elif entry.is_file(follow_symlinks=True):
-                        yield entry
+        except (PermissionError, OSError):
+            pass
+
+    def _scan_all_recursive(self, directory: Union[Path, str]):
+        """Recursively scan directory using os.scandir, yielding all entries."""
+        try:
+            with os.scandir(directory) as it:
+                for entry in it:
+                    yield entry
+                    if entry.is_dir(follow_symlinks=False):
+                        yield from self._scan_all_recursive(entry.path)
         except (PermissionError, OSError):
             pass
     

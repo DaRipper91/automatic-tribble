@@ -96,6 +96,23 @@ async def test_confirmation_screen_custom_labels():
         assert str(screen.query_one("#question", Label).render()) == "Confirm Action?"
 
         # Check buttons
+async def test_confirmation_screen_default():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = ConfirmationScreen("Are you sure?")
+        await app.push_screen(screen)
+
+        confirm_btn = screen.query_one("#confirm", Button)
+        assert str(confirm_btn.label) == "Delete"
+        assert confirm_btn.variant == "error"
+
+@pytest.mark.asyncio
+async def test_confirmation_screen_custom():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = ConfirmationScreen("Execute?", confirm_label="Execute", confirm_variant="success")
+        await app.push_screen(screen)
+
         confirm_btn = screen.query_one("#confirm", Button)
         assert str(confirm_btn.label) == "Execute"
         assert confirm_btn.variant == "success"
@@ -106,4 +123,19 @@ async def test_confirmation_screen_custom_labels():
 
         # Test confirm
         await pilot.click("#confirm")
+@pytest.mark.asyncio
+async def test_confirmation_screen_escape():
+    app = HeadlessApp()
+    result = None
+
+    def handle_result(res):
+        nonlocal result
+        result = res
+
+    async with app.run_test() as pilot:
+        screen = ConfirmationScreen("Are you sure?")
+        await app.push_screen(screen, handle_result)
+
+        await pilot.press("escape")
+        assert result is False
         assert app.screen is not screen
