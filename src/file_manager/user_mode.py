@@ -193,8 +193,11 @@ class UserModeScreen(Screen):
             else:
                 self._background_move(selected_path, target_dir, active_panel_widget, target_panel)
 
-    @work(thread=True)
+    @work(thread=True, name="move_worker")
     def _background_move(self, source: Path, destination: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
+        """
+        Perform move operation in a background thread to prevent UI blocking.
+        """
         try:
             self.file_ops.move(source, destination)
             self.app.call_from_thread(self.notify, f"Moved {source.name} to {destination}")
@@ -203,8 +206,11 @@ class UserModeScreen(Screen):
         except Exception as e:
             self.app.call_from_thread(self.notify, f"Error moving: {str(e)}", severity="error")
 
-    @work(thread=True)
+    @work(thread=True, name="move_overwrite_worker")
     def _background_move_overwrite(self, source: Path, destination: Path, target_path: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
+        """
+        Perform overwrite move operation in a background thread to prevent UI blocking.
+        """
         try:
             self.file_ops.delete(target_path)
             self.file_ops.move(source, destination)
@@ -256,13 +262,7 @@ class UserModeScreen(Screen):
             if not dir_name:
                 return
 
-            try:
-                new_path = current_dir / dir_name
-                self.file_ops.create_directory(new_path)
-                self.notify(f"Created directory {dir_name}")
-                active_panel_widget.refresh_view()
-            except Exception as e:
-                self.notify(f"Error creating directory: {str(e)}", severity="error")
+            self._background_create_dir(current_dir, dir_name, active_panel_widget)
 
         self.app.push_screen(
             InputScreen(
@@ -271,6 +271,16 @@ class UserModeScreen(Screen):
             ),
             do_create_dir
         )
+
+    @work(thread=True)
+    def _background_create_dir(self, current_dir: Path, dir_name: str, panel: FilePanel) -> None:
+        try:
+            new_path = current_dir / dir_name
+            self.file_ops.create_directory(new_path)
+            self.app.call_from_thread(self.notify, f"Created directory {dir_name}")
+            self.app.call_from_thread(panel.refresh_view)
+        except Exception as e:
+            self.app.call_from_thread(self.notify, f"Error creating directory: {str(e)}", severity="error")
 
     def action_rename(self) -> None:
         """Rename selected file/directory."""
@@ -282,12 +292,7 @@ class UserModeScreen(Screen):
                 if not new_name or new_name == selected_path.name:
                     return
 
-                try:
-                    self.file_ops.rename(selected_path, new_name)
-                    self.notify(f"Renamed to {new_name}")
-                    active_panel_widget.refresh_view()
-                except Exception as e:
-                    self.notify(f"Error renaming: {str(e)}", severity="error")
+                self._background_rename(selected_path, new_name, active_panel_widget)
 
             self.app.push_screen(
                 InputScreen(
@@ -297,6 +302,15 @@ class UserModeScreen(Screen):
                 ),
                 do_rename
             )
+
+    @work(thread=True)
+    def _background_rename(self, selected_path: Path, new_name: str, panel: FilePanel) -> None:
+        try:
+            self.file_ops.rename(selected_path, new_name)
+            self.app.call_from_thread(self.notify, f"Renamed to {new_name}")
+            self.app.call_from_thread(panel.refresh_view)
+        except Exception as e:
+            self.app.call_from_thread(self.notify, f"Error renaming: {str(e)}", severity="error")
 
     def action_refresh(self) -> None:
         """Refresh both panels."""

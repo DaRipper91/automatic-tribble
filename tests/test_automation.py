@@ -1,5 +1,7 @@
 import unittest
 import shutil
+import os
+from datetime import datetime
 from pathlib import Path
 from src.file_manager.automation import FileOrganizer
 
@@ -287,6 +289,112 @@ class TestFindDuplicates(unittest.TestCase):
 
         duplicates = self.organizer.find_duplicates(self.test_dir)
         self.assertEqual(len(duplicates), 0)
+
+    def test_find_duplicates_partial_collision(self):
+        # Create two files with same size, same partial hash, but different full hash
+        # To do this, we need files > 3 * chunk_size (8192) = 24576
+        # Let's use 30000 bytes
+
+        chunk_size = 8192
+        size = 30000
+
+        # We need to construct content such that:
+        # Start (0-8192) is same
+        # Middle (size//2 - 4096 : size//2 + 4096) is same. 15000-4096=10904 to 19096
+        # End (size - 8192 : size) is same. 21808 to 30000
+
+        # Different parts: 8192-10904, 19096-21808
+
+        import os
+        common_content = os.urandom(size)
+        content1 = bytearray(common_content)
+        content2 = bytearray(common_content)
+
+        # Modify in unsampled region (e.g., byte 9000)
+        content2[9000] = (content2[9000] + 1) % 256
+
+        file1 = self.test_dir / "file1.bin"
+        with open(file1, "wb") as f:
+            f.write(content1)
+
+        file2 = self.test_dir / "file2.bin"
+        with open(file2, "wb") as f:
+            f.write(content2)
+
+        duplicates = self.organizer.find_duplicates(self.test_dir)
+
+        # Should be empty because they are different
+        self.assertEqual(len(duplicates), 0)
+
+
+class TestOrganizeByDate(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = Path("test_organize_by_date")
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+        self.test_dir.mkdir()
+
+        self.source_dir = self.test_dir / "source"
+        self.target_dir = self.test_dir / "target"
+        self.source_dir.mkdir()
+        self.target_dir.mkdir()
+
+        self.organizer = FileOrganizer()
+
+    def tearDown(self):
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+
+    def test_organize_by_date_basic(self):
+        # Create a file
+        file1 = self.source_dir / "test.txt"
+        file1.touch()
+
+        # Set a specific mtime (2023-01-01 12:00:00)
+        timestamp = datetime(2023, 1, 1, 12, 0, 0).timestamp()
+        os.utime(file1, (timestamp, timestamp))
+
+        # Organize
+        result = self.organizer.organize_by_date(
+            source_dir=self.source_dir,
+            target_dir=self.target_dir,
+            move=False
+        )
+
+        # Verify default format %Y/%m
+        # Note: on Windows paths might be different, but Path / operator handles it.
+        # However, the key in result dictionary will be "2023/01" because of strftime("%Y/%m")
+        expected_path = self.target_dir / "2023" / "01" / "test.txt"
+        # Wait, strftime produces "2023/01". target_dir / "2023/01" might mean target_dir/"2023"/"01" on some systems if passed to Path constructor,
+        # but here we use target_dir / date_str.
+        # If date_str is "2023/01", Path("target") / "2023/01" -> "target/2023/01".
+
+        self.assertTrue(expected_path.exists())
+        self.assertIn("2023/01", result)
+        self.assertIn(expected_path, result["2023/01"])
+
+    def test_organize_by_date_custom_format(self):
+        # Create a file
+        file1 = self.source_dir / "test.txt"
+        file1.touch()
+
+        # Set a specific mtime (2023-01-01 12:00:00)
+        timestamp = datetime(2023, 1, 1, 12, 0, 0).timestamp()
+        os.utime(file1, (timestamp, timestamp))
+
+        # Organize with custom format
+        result = self.organizer.organize_by_date(
+            source_dir=self.source_dir,
+            target_dir=self.target_dir,
+            date_format="%Y-%m-%d",
+            move=True
+        )
+
+        # Verify format %Y-%m-%d
+        expected_path = self.target_dir / "2023-01-01" / "test.txt"
+        self.assertTrue(expected_path.exists())
+        self.assertIn("2023-01-01", result)
+        self.assertFalse(file1.exists()) # moved
 
 
 if __name__ == '__main__':
