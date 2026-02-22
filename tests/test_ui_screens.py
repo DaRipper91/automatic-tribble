@@ -125,6 +125,7 @@ async def test_confirmation_screen_custom():
 
         # Test confirm
         await pilot.click("#confirm")
+
 @pytest.mark.asyncio
 async def test_confirmation_screen_escape():
     app = HeadlessApp()

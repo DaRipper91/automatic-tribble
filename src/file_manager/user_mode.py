@@ -181,6 +181,34 @@ class UserModeScreen(Screen):
             target_dir = target_panel.current_dir
             target_path = target_dir / selected_path.name
 
+        try:
+            if operation == "copy":
+                self.file_ops.copy(selected_path, target_dir)
+            else:  # move
+                self.file_ops.move(selected_path, target_dir)
+                active_panel.refresh_view()
+
+            self.notify(f"{verb} {selected_path.name} to {target_dir}")
+            target_panel.refresh_view()
+        except FileExistsError:
+            def confirm_overwrite(confirmed: bool) -> None:
+                if confirmed:
+                    try:
+                        target_path = target_dir / selected_path.name
+                        self.file_ops.delete(target_path)
+                        self.file_ops.move(selected_path, target_dir)
+                        self.notify(f"Overwrote {selected_path.name} in {target_dir}")
+                        active_panel_widget.refresh_view()
+                        target_panel.refresh_view()
+                    except Exception as e:
+                        self.notify(f"Error overwriting: {str(e)}", severity="error")
+
+            self.app.push_screen(
+                ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
+                confirm_overwrite
+            )
+        except Exception as e:
+            self.notify(f"Error moving: {str(e)}", severity="error")
             if target_path.exists():
                 def confirm_overwrite(confirmed: bool) -> None:
                     if confirmed:

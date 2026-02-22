@@ -166,6 +166,7 @@ class FileOperations:
                 if entry.is_file(follow_symlinks=True):
                     total += entry.stat(follow_symlinks=True).st_size
             except OSError:
+                pass
                 continue
 
         return total
