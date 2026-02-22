@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Callable, Optional, Union
 from datetime import datetime, timedelta
 import os
+from .utils import recursive_scan
 
 
 # Constants
@@ -213,7 +214,7 @@ class FileOrganizer:
         
         try:
             if recursive:
-                entries = self._scan_recursive(directory)
+                entries = (e for e in recursive_scan(directory) if e.is_file(follow_symlinks=True))
             else:
                 try:
                     entries = (e for e in os.scandir(directory) if e.is_file())
@@ -239,9 +240,26 @@ class FileOrganizer:
         duplicates: Dict[str, List[Path]] = {}
         
         for size, files in size_groups.items():
-            if len(files) > 1:
-                # Compute hashes for files with same size
-                for file_path in files:
+            if len(files) < 2:
+                continue
+
+            # Group by partial hash first to avoid full reads of large files
+            partial_groups: Dict[str, List[Path]] = {}
+            for file_path in files:
+                try:
+                    partial_hash = self._compute_partial_hash(file_path, file_size=size)
+                    if partial_hash not in partial_groups:
+                        partial_groups[partial_hash] = []
+                    partial_groups[partial_hash].append(file_path)
+                except OSError:
+                    continue
+
+            # Check full hash only for files with matching partial hash
+            for partial_files in partial_groups.values():
+                if len(partial_files) < 2:
+                    continue
+
+                for file_path in partial_files:
                     try:
                         file_hash = self._compute_file_hash(file_path)
                         if file_hash not in duplicates:
@@ -258,18 +276,6 @@ class FileOrganizer:
         
         return result
 
-    def _scan_recursive(self, directory: Union[Path, str]):
-        """Recursively scan directory using os.scandir."""
-        try:
-            with os.scandir(directory) as it:
-                for entry in it:
-                    if entry.is_dir(follow_symlinks=False):
-                        yield from self._scan_recursive(entry.path)
-                    elif entry.is_file(follow_symlinks=True):
-                        yield entry
-        except (PermissionError, OSError):
-            pass
-    
     def batch_rename(
         self,
         directory: Path,
@@ -289,6 +295,9 @@ class FileOrganizer:
         Returns:
             List of renamed file paths
         """
+        if not pattern:
+            raise ValueError("Pattern cannot be empty")
+
         renamed_files = []
         
         if recursive:
@@ -404,4 +413,48 @@ class FileOrganizer:
             for chunk in iter(lambda: f.read(chunk_size), b""):
                 sha256_hash.update(chunk)
         
+        return sha256_hash.hexdigest()
+
+    @staticmethod
+    def _compute_partial_hash(
+        file_path: Path,
+        chunk_size: int = 8192,
+        file_size: Optional[int] = None
+    ) -> str:
+        """
+        Compute a partial hash of a file using start, middle, and end chunks.
+
+        Args:
+            file_path: Path to the file
+            chunk_size: Size of chunks to read
+            file_size: Size of file if known (avoids stat call)
+
+        Returns:
+            Hex digest of the partial hash
+        """
+        if file_size is None:
+            try:
+                file_size = file_path.stat().st_size
+            except OSError:
+                # Fallback to empty string or raise error, but caller handles OSError
+                raise
+
+        # If file is small, hash the whole thing
+        if file_size <= 3 * chunk_size:
+            return FileOrganizer._compute_file_hash(file_path, chunk_size)
+
+        sha256_hash = hashlib.sha256()
+
+        with open(file_path, "rb") as f:
+            # Start
+            sha256_hash.update(f.read(chunk_size))
+
+            # Middle
+            f.seek(file_size // 2 - chunk_size // 2)
+            sha256_hash.update(f.read(chunk_size))
+
+            # End
+            f.seek(-chunk_size, os.SEEK_END)
+            sha256_hash.update(f.read(chunk_size))
+
         return sha256_hash.hexdigest()

@@ -2,6 +2,7 @@ import os
 import fnmatch
 from pathlib import Path
 from typing import List, Optional, Union
+from .utils import recursive_scan
 
 FILE_TYPE_CHECK_BYTES = 1024
 
@@ -29,7 +30,7 @@ class FileSearcher:
         try:
             if recursive:
                 # Use list() to force iteration and catch errors early if any
-                entries_iter = self._scan_recursive(directory)
+                entries_iter = recursive_scan(directory)
             else:
                 entries_iter = os.scandir(directory)
 
@@ -76,6 +77,39 @@ class FileSearcher:
                         if self._is_text_file(file_path):
                             if self._file_contains_term(file_path, search_term, case_sensitive):
                                 results.append(file_path)
+            stack = [str(directory)]
+            while stack:
+                current_dir = stack.pop()
+                try:
+                    with os.scandir(current_dir) as it:
+                        for entry in it:
+                            try:
+                                if entry.is_dir(follow_symlinks=False):
+                                    stack.append(entry.path)
+                                    continue
+
+                                if not entry.is_file():
+                                    continue
+
+                                if fnmatch.fnmatch(entry.name, file_pattern):
+                                    file_path = Path(entry.path)
+
+                                    if self._is_text_file(file_path):
+                                        try:
+                                            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                                # Simple line-by-line search for now
+                                                for line in f:
+                                                    if not case_sensitive:
+                                                        line = line.lower()
+                                                    if search_term in line:
+                                                        results.append(file_path)
+                                                        break
+                                        except (IOError, OSError):
+                                            continue
+                            except OSError:
+                                continue
+                except (PermissionError, OSError):
+                    pass
         except (PermissionError, OSError):
             pass
         
@@ -96,7 +130,7 @@ class FileSearcher:
         
         try:
             if recursive:
-                entries_iter = self._scan_recursive(directory)
+                entries_iter = recursive_scan(directory)
             else:
                 entries_iter = os.scandir(directory)
 
@@ -120,20 +154,6 @@ class FileSearcher:
 
         self.results = results
         return results
-
-    def _scan_recursive(self, directory: Union[Path, str]):
-        """Recursively scan directory using os.scandir (iterative stack-based)."""
-        stack = [str(directory)]
-        while stack:
-            current_dir = stack.pop()
-            try:
-                with os.scandir(current_dir) as it:
-                    for entry in it:
-                        yield entry
-                        if entry.is_dir(follow_symlinks=False):
-                            stack.append(entry.path)
-            except (PermissionError, OSError):
-                pass
 
     @staticmethod
     def _file_contains_term(file_path: Path, search_term: str, case_sensitive: bool) -> bool:

@@ -8,6 +8,7 @@ from textual.containers import Container, Horizontal, Vertical, ScrollableContai
 from textual.widgets import Header, Footer, Button, Label, Input, Static, RichLog
 from textual.screen import Screen
 from textual.binding import Binding
+from textual import work
 
 from .ai_integration import GeminiClient
 from .screens import ConfirmationScreen
@@ -140,6 +141,23 @@ class AIModeScreen(Screen):
         if event.input.id == "command_input":
             self._process_command()
 
+    def _log_message(self, message: str) -> None:
+        """Helper to log messages from threads safely."""
+        log = self.query_one("#output_log", RichLog)
+        log.write(message)
+
+    @work(thread=True)
+    def _execute_command_worker(self, action_data: dict) -> None:
+        """Execute the command in a worker thread."""
+        self.app.call_from_thread(self._log_message, "[dim]Executing...[/]")
+
+        result = self.gemini_client.execute_command(action_data)
+
+        if result.startswith("Error"):
+            self.app.call_from_thread(self._log_message, f"[bold red]Result:[/ bold red] {result}")
+        else:
+            self.app.call_from_thread(self._log_message, f"[bold green]Result:[/ bold green] {result}")
+
     def _process_command(self) -> None:
         """Process the current command."""
         command_input = self.query_one("#command_input", Input)
@@ -173,13 +191,7 @@ class AIModeScreen(Screen):
         # 2. Execute
         def check_confirm(confirmed: bool) -> None:
             if confirmed:
-                log.write("[dim]Executing...[/]")
-                result = self.gemini_client.execute_command(action_data)
-
-                if result.startswith("Error"):
-                    log.write(f"[bold red]Result:[/ bold red] {result}")
-                else:
-                    log.write(f"[bold green]Result:[/ bold green] {result}")
+                self._execute_command_worker(action_data)
             else:
                 log.write("[yellow]Command cancelled.[/]")
 
