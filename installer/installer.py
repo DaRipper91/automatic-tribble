@@ -1,13 +1,12 @@
+#!/usr/bin/env python3
 import os
 import sys
-import shutil
-import subprocess
 import asyncio
 from pathlib import Path
 from textual.app import App, ComposeResult
-from textual.containers import Container, Vertical, Horizontal
+from textual.containers import Container
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Button, Label, Static, RichLog
+from textual.widgets import Button, Label, RichLog
 from rich.console import Console
 
 console = Console()
@@ -121,13 +120,16 @@ class InstallScreen(Screen):
                 return False
             return True
 
+        # Use the current python executable for pip commands
+        pip_cmd = f"'{sys.executable}' -m pip"
+
         # Install dependencies
         # We assume we are in the root of the repo
-        if not await run_cmd("pip install -r requirements.txt", "Installing dependencies"):
+        if not await run_cmd(f"{pip_cmd} install -r requirements.txt", "Installing dependencies"):
              log.write("[yellow]Warning: Failed to install requirements.txt. Proceeding...[/]")
 
         # Install package
-        install_cmd = "pip install ."
+        install_cmd = f"{pip_cmd} install ."
 
         if not await run_cmd(install_cmd, "Installing TFM package"):
              log.write("[yellow]Retrying with --break-system-packages...[/]")
