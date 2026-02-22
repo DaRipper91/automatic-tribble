@@ -6,6 +6,7 @@ import os
 import shutil
 from pathlib import Path
 from typing import Union
+from .utils import recursive_scan
 
 
 class FileOperations:
@@ -159,47 +160,13 @@ class FileOperations:
         os.scandir's cached stat results where possible.
         """
         total = 0
-        stack = [directory]
-
-        while stack:
-            current_dir = stack.pop()
+        for entry in recursive_scan(directory):
             try:
-                with os.scandir(current_dir) as it:
-                    for entry in it:
-                        try:
-                            # Use follow_symlinks=True for files to match Path.is_file() behavior
-                            if entry.is_file(follow_symlinks=True):
-                                total += entry.stat().st_size
-                            elif entry.is_dir(follow_symlinks=False):
-                                stack.append(entry.path)
-                        except OSError:
-                            pass
+                # Use follow_symlinks=True for files to match Path.is_file() behavior
+                if entry.is_file(follow_symlinks=True):
+                    total += entry.stat(follow_symlinks=True).st_size
             except OSError:
-                pass
-
-        total = 0
-        try:
-            # Use iterative stack approach to avoid recursion limits
-            stack = [str(directory)]
-            while stack:
-                current_dir = stack.pop()
-                try:
-                    # os.scandir is faster than Path.rglob as it avoids Path object creation
-                    with os.scandir(current_dir) as it:
-                        for entry in it:
-                            try:
-                                # Don't follow symlinks for directories to avoid infinite loops
-                                if entry.is_dir(follow_symlinks=False):
-                                    stack.append(entry.path)
-                                # Count files and symlinks to files
-                                elif entry.is_file(follow_symlinks=True):
-                                    total += entry.stat(follow_symlinks=True).st_size
-                            except OSError:
-                                continue
-                except OSError:
-                    continue
-        except OSError:
-            pass
+                continue
 
         return total
     
