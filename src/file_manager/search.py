@@ -2,6 +2,7 @@ import os
 import fnmatch
 from pathlib import Path
 from typing import List, Optional, Union
+from .utils import recursive_scan
 
 FILE_TYPE_CHECK_BYTES = 1024
 
@@ -29,7 +30,7 @@ class FileSearcher:
         try:
             if recursive:
                 # Use list() to force iteration and catch errors early if any
-                entries_iter = self._scan_recursive(directory)
+                entries_iter = recursive_scan(directory)
             else:
                 entries_iter = os.scandir(directory)
 
@@ -68,15 +69,12 @@ class FileSearcher:
         chunk_size = 1024 * 1024 # 1MB
 
         try:
-            # We use os.walk here as it is convenient for simple iteration where we need root
-            for root, _, files in os.walk(directory):
-                root_path = Path(root)
-                
-                for file_name in files:
-                    if fnmatch.fnmatch(file_name, file_pattern):
-                        file_path = root_path / file_name
-                        
-                        if self._is_text_file(file_path):
+            stack = [str(directory)]
+            while stack:
+                current_dir = stack.pop()
+                try:
+                    with os.scandir(current_dir) as it:
+                        for entry in it:
                             try:
                                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                                     overlap = ""
@@ -108,7 +106,32 @@ class FileSearcher:
                                             # If chunk is tiny, append to overlap
                                             overlap += search_chunk
                             except (IOError, OSError):
+                                if entry.is_dir(follow_symlinks=False):
+                                    stack.append(entry.path)
+                                    continue
+
+                                if not entry.is_file():
+                                    continue
+
+                                if fnmatch.fnmatch(entry.name, file_pattern):
+                                    file_path = Path(entry.path)
+
+                                    if self._is_text_file(file_path):
+                                        try:
+                                            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                                # Simple line-by-line search for now
+                                                for line in f:
+                                                    if not case_sensitive:
+                                                        line = line.lower()
+                                                    if search_term in line:
+                                                        results.append(file_path)
+                                                        break
+                                        except (IOError, OSError):
+                                            continue
+                            except OSError:
                                 continue
+                except (PermissionError, OSError):
+                    pass
         except (PermissionError, OSError):
             pass
         
@@ -129,7 +152,7 @@ class FileSearcher:
         
         try:
             if recursive:
-                entries_iter = self._scan_recursive(directory)
+                entries_iter = recursive_scan(directory)
             else:
                 entries_iter = os.scandir(directory)
 
@@ -153,20 +176,6 @@ class FileSearcher:
 
         self.results = results
         return results
-
-    def _scan_recursive(self, directory: Union[Path, str]):
-        """Recursively scan directory using os.scandir (iterative stack-based)."""
-        stack = [str(directory)]
-        while stack:
-            current_dir = stack.pop()
-            try:
-                with os.scandir(current_dir) as it:
-                    for entry in it:
-                        yield entry
-                        if entry.is_dir(follow_symlinks=False):
-                            stack.append(entry.path)
-            except (PermissionError, OSError):
-                pass
 
     @staticmethod
     def _is_text_file(file_path: Path) -> bool:
