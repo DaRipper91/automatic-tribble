@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Callable, Optional, Union
 from datetime import datetime, timedelta
 import os
+from .utils import recursive_scan
 
 
 # Constants
@@ -63,36 +64,13 @@ class FileOrganizer:
             extension_map = self._DEFAULT_EXTENSION_MAP
         else:
             extension_map = self._build_extension_map(categories)
-        
-        organized = {}
-        target_dir.mkdir(parents=True, exist_ok=True)
-        
-        for file_path in source_dir.iterdir():
-            if not file_path.is_file():
-                continue
             
-            # Find matching category
-            category = self._get_file_category(file_path, extension_map)
-            
-            if category:
-                # Create category directory
-                category_dir = target_dir / category
-                category_dir.mkdir(exist_ok=True)
-                
-                # Move or copy file
-                target_path = category_dir / file_path.name
-                
-                if move:
-                    shutil.move(str(file_path), str(target_path))
-                else:
-                    shutil.copy2(file_path, target_path)
-                
-                if category not in organized:
-                    organized[category] = []
-                organized[category].append(target_path)
-        
-        self.organized_files = organized
-        return organized
+        return self._organize_generic(
+            source_dir,
+            target_dir,
+            lambda p: self._get_file_category(p, extension_map),
+            move
+        )
     
     def organize_by_date(
         self,
@@ -113,6 +91,37 @@ class FileOrganizer:
         Returns:
             Dictionary mapping date strings to lists of organized files
         """
+        def get_date_key(file_path: Path) -> str:
+            mtime = file_path.stat().st_mtime
+            date = datetime.fromtimestamp(mtime)
+            return date.strftime(date_format)
+
+        return self._organize_generic(
+            source_dir,
+            target_dir,
+            get_date_key,
+            move
+        )
+
+    def _organize_generic(
+        self,
+        source_dir: Path,
+        target_dir: Path,
+        key_func: Callable[[Path], Optional[str]],
+        move: bool
+    ) -> Dict[str, List[Path]]:
+        """
+        Generic method to organize files based on a key generation function.
+
+        Args:
+            source_dir: Directory containing files to organize
+            target_dir: Directory where organized files will be placed
+            key_func: Function that takes a file Path and returns a string key (subdirectory) or None
+            move: If True, move files; if False, copy files
+
+        Returns:
+            Dictionary mapping keys to lists of organized files
+        """
         organized = {}
         target_dir.mkdir(parents=True, exist_ok=True)
         
@@ -120,34 +129,35 @@ class FileOrganizer:
             if not file_path.is_file():
                 continue
             
-            # Get file modification time
-            mtime = file_path.stat().st_mtime
-            date = datetime.fromtimestamp(mtime)
-            date_str = date.strftime(date_format)
-            
-            # Create date directory and secure against path traversal
-            date_dir = target_dir / date_str
+            key = key_func(file_path)
+            if not key:
+                continue
 
+            # Create target directory and secure against path traversal
+            key_dir = target_dir / key
+            
             try:
-                if not date_dir.resolve().is_relative_to(target_dir.resolve()):
+                # Resolve paths to handle '..' etc.
+                if not key_dir.resolve().is_relative_to(target_dir.resolve()):
                     continue
             except (ValueError, RuntimeError):
                 continue
 
-            date_dir.mkdir(parents=True, exist_ok=True)
+            key_dir.mkdir(parents=True, exist_ok=True)
             
             # Move or copy file
-            target_path = date_dir / file_path.name
+            target_path = key_dir / file_path.name
+            target_path = self._get_unique_path(target_path)
             
             if move:
                 shutil.move(str(file_path), str(target_path))
             else:
                 shutil.copy2(file_path, target_path)
             
-            if date_str not in organized:
-                organized[date_str] = []
-            organized[date_str].append(target_path)
-        
+            if key not in organized:
+                organized[key] = []
+            organized[key].append(target_path)
+
         self.organized_files = organized
         return organized
     
@@ -211,7 +221,7 @@ class FileOrganizer:
         
         try:
             if recursive:
-                entries = self._scan_recursive(directory)
+                entries = (e for e in recursive_scan(directory) if e.is_file(follow_symlinks=True))
             else:
                 try:
                     entries = (e for e in os.scandir(directory) if e.is_file())
@@ -237,9 +247,26 @@ class FileOrganizer:
         duplicates: Dict[str, List[Path]] = {}
         
         for size, files in size_groups.items():
-            if len(files) > 1:
-                # Compute hashes for files with same size
-                for file_path in files:
+            if len(files) < 2:
+                continue
+
+            # Group by partial hash first to avoid full reads of large files
+            partial_groups: Dict[str, List[Path]] = {}
+            for file_path in files:
+                try:
+                    partial_hash = self._compute_partial_hash(file_path, file_size=size)
+                    if partial_hash not in partial_groups:
+                        partial_groups[partial_hash] = []
+                    partial_groups[partial_hash].append(file_path)
+                except OSError:
+                    continue
+
+            # Check full hash only for files with matching partial hash
+            for partial_files in partial_groups.values():
+                if len(partial_files) < 2:
+                    continue
+
+                for file_path in partial_files:
                     try:
                         file_hash = self._compute_file_hash(file_path)
                         if file_hash not in duplicates:
@@ -256,18 +283,6 @@ class FileOrganizer:
         
         return result
 
-    def _scan_recursive(self, directory: Union[Path, str]):
-        """Recursively scan directory using os.scandir."""
-        try:
-            with os.scandir(directory) as it:
-                for entry in it:
-                    if entry.is_dir(follow_symlinks=False):
-                        yield from self._scan_recursive(entry.path)
-                    elif entry.is_file(follow_symlinks=True):
-                        yield entry
-        except (PermissionError, OSError):
-            pass
-    
     def batch_rename(
         self,
         directory: Path,
@@ -287,6 +302,9 @@ class FileOrganizer:
         Returns:
             List of renamed file paths
         """
+        if not pattern:
+            raise ValueError("Pattern cannot be empty")
+
         renamed_files = []
         
         if recursive:
@@ -323,6 +341,32 @@ class FileOrganizer:
         
         return renamed_files
     
+    @staticmethod
+    def _get_unique_path(target_path: Path) -> Path:
+        """
+        Generate a unique path by appending a counter if the path already exists.
+
+        Args:
+            target_path: The desired path
+
+        Returns:
+            A unique path that does not exist
+        """
+        if not target_path.exists():
+            return target_path
+
+        stem = target_path.stem
+        suffix = target_path.suffix
+        parent = target_path.parent
+        counter = 1
+
+        while True:
+            new_name = f"{stem}_{counter}{suffix}"
+            new_path = parent / new_name
+            if not new_path.exists():
+                return new_path
+            counter += 1
+
     @staticmethod
     def _build_extension_map(categories: Dict[str, List[str]]) -> Dict[str, str]:
         """
@@ -376,4 +420,48 @@ class FileOrganizer:
             for chunk in iter(lambda: f.read(chunk_size), b""):
                 sha256_hash.update(chunk)
         
+        return sha256_hash.hexdigest()
+
+    @staticmethod
+    def _compute_partial_hash(
+        file_path: Path,
+        chunk_size: int = 8192,
+        file_size: Optional[int] = None
+    ) -> str:
+        """
+        Compute a partial hash of a file using start, middle, and end chunks.
+
+        Args:
+            file_path: Path to the file
+            chunk_size: Size of chunks to read
+            file_size: Size of file if known (avoids stat call)
+
+        Returns:
+            Hex digest of the partial hash
+        """
+        if file_size is None:
+            try:
+                file_size = file_path.stat().st_size
+            except OSError:
+                # Fallback to empty string or raise error, but caller handles OSError
+                raise
+
+        # If file is small, hash the whole thing
+        if file_size <= 3 * chunk_size:
+            return FileOrganizer._compute_file_hash(file_path, chunk_size)
+
+        sha256_hash = hashlib.sha256()
+
+        with open(file_path, "rb") as f:
+            # Start
+            sha256_hash.update(f.read(chunk_size))
+
+            # Middle
+            f.seek(file_size // 2 - chunk_size // 2)
+            sha256_hash.update(f.read(chunk_size))
+
+            # End
+            f.seek(-chunk_size, os.SEEK_END)
+            sha256_hash.update(f.read(chunk_size))
+
         return sha256_hash.hexdigest()
