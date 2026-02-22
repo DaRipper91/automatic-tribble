@@ -1,5 +1,7 @@
 import unittest
 import shutil
+import os
+from datetime import datetime
 from pathlib import Path
 from src.file_manager.automation import FileOrganizer
 
@@ -323,6 +325,76 @@ class TestFindDuplicates(unittest.TestCase):
 
         # Should be empty because they are different
         self.assertEqual(len(duplicates), 0)
+
+
+class TestOrganizeByDate(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = Path("test_organize_by_date")
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+        self.test_dir.mkdir()
+
+        self.source_dir = self.test_dir / "source"
+        self.target_dir = self.test_dir / "target"
+        self.source_dir.mkdir()
+        self.target_dir.mkdir()
+
+        self.organizer = FileOrganizer()
+
+    def tearDown(self):
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+
+    def test_organize_by_date_basic(self):
+        # Create a file
+        file1 = self.source_dir / "test.txt"
+        file1.touch()
+
+        # Set a specific mtime (2023-01-01 12:00:00)
+        timestamp = datetime(2023, 1, 1, 12, 0, 0).timestamp()
+        os.utime(file1, (timestamp, timestamp))
+
+        # Organize
+        result = self.organizer.organize_by_date(
+            source_dir=self.source_dir,
+            target_dir=self.target_dir,
+            move=False
+        )
+
+        # Verify default format %Y/%m
+        # Note: on Windows paths might be different, but Path / operator handles it.
+        # However, the key in result dictionary will be "2023/01" because of strftime("%Y/%m")
+        expected_path = self.target_dir / "2023" / "01" / "test.txt"
+        # Wait, strftime produces "2023/01". target_dir / "2023/01" might mean target_dir/"2023"/"01" on some systems if passed to Path constructor,
+        # but here we use target_dir / date_str.
+        # If date_str is "2023/01", Path("target") / "2023/01" -> "target/2023/01".
+
+        self.assertTrue(expected_path.exists())
+        self.assertIn("2023/01", result)
+        self.assertIn(expected_path, result["2023/01"])
+
+    def test_organize_by_date_custom_format(self):
+        # Create a file
+        file1 = self.source_dir / "test.txt"
+        file1.touch()
+
+        # Set a specific mtime (2023-01-01 12:00:00)
+        timestamp = datetime(2023, 1, 1, 12, 0, 0).timestamp()
+        os.utime(file1, (timestamp, timestamp))
+
+        # Organize with custom format
+        result = self.organizer.organize_by_date(
+            source_dir=self.source_dir,
+            target_dir=self.target_dir,
+            date_format="%Y-%m-%d",
+            move=True
+        )
+
+        # Verify format %Y-%m-%d
+        expected_path = self.target_dir / "2023-01-01" / "test.txt"
+        self.assertTrue(expected_path.exists())
+        self.assertIn("2023-01-01", result)
+        self.assertFalse(file1.exists()) # moved
 
 
 if __name__ == '__main__':
