@@ -1,4 +1,5 @@
 import os
+import io
 import fnmatch
 from pathlib import Path
 from typing import List, Optional, Union
@@ -62,6 +63,13 @@ class FileSearcher:
         """
         results = []
         search_term = search_text if case_sensitive else search_text.lower()
+        
+        # Set of known text extensions for quick check
+        text_extensions = {
+            ".txt", ".md", ".py", ".js", ".java", ".c", ".cpp", ".h",
+            ".json", ".xml", ".html", ".css", ".sh", ".bash", ".yaml",
+            ".yml", ".ini", ".cfg", ".conf", ".log", ".csv"
+        }
         search_len = len(search_term)
         if search_len == 0:
             return []
@@ -77,6 +85,42 @@ class FileSearcher:
                     if fnmatch.fnmatch(file_name, file_pattern):
                         file_path = root_path / file_name
                         
+                        try:
+                            # Check extension first
+                            is_known_text = file_path.suffix.lower() in text_extensions
+
+                            if is_known_text:
+                                # Open as text directly
+                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                    for line in f:
+                                        if not case_sensitive:
+                                            line = line.lower()
+                                        if search_term in line:
+                                            results.append(file_path)
+                                            break
+                            else:
+                                # Not a known extension, check for binary content
+                                # Open as binary to check first few bytes
+                                with open(file_path, "rb") as f:
+                                    chunk = f.read(FILE_TYPE_CHECK_BYTES)
+                                    if b"\x00" in chunk:
+                                        # Binary file, skip
+                                        continue
+
+                                    # It's likely text, rewind and read rest
+                                    f.seek(0)
+
+                                    # Wrap the binary stream with TextIOWrapper
+                                    # This avoids closing and reopening the file
+                                    with io.TextIOWrapper(f, encoding="utf-8", errors="ignore") as text_f:
+                                        for line in text_f:
+                                            if not case_sensitive:
+                                                line = line.lower()
+                                            if search_term in line:
+                                                results.append(file_path)
+                                                break
+                        except (IOError, OSError):
+                            continue
                         if self._is_text_file(file_path):
                             if self._file_contains_term(file_path, search_term, case_sensitive):
                                 results.append(file_path)
@@ -188,6 +232,19 @@ class FileSearcher:
         self.results = results
         return results
 
+    def _scan_recursive(self, directory: Union[Path, str]):
+        """Recursively scan directory using os.scandir (iterative stack-based)."""
+        stack = [str(directory)]
+        while stack:
+            current_dir = stack.pop()
+            try:
+                with os.scandir(current_dir) as it:
+                    for entry in it:
+                        yield entry
+                        if entry.is_dir(follow_symlinks=False):
+                            stack.append(entry.path)
+            except (PermissionError, OSError):
+                pass
     @staticmethod
     def _file_contains_term(file_path: Path, search_term: str, case_sensitive: bool) -> bool:
         """Check if a file contains the search term."""
