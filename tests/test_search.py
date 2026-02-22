@@ -64,3 +64,61 @@ class TestSearchOptimization(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestFileSearcherHelper(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = Path("test_search_helper")
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+        self.test_dir.mkdir()
+
+    def tearDown(self):
+        if self.test_dir.exists():
+            shutil.rmtree(self.test_dir)
+
+    def test_file_contains_term_simple(self):
+        file_path = self.test_dir / "simple.txt"
+        with open(file_path, "w") as f:
+            f.write("This is a simple test.")
+
+        # Test exact match
+        self.assertTrue(FileSearcher._file_contains_term(file_path, "simple", case_sensitive=False))
+        self.assertTrue(FileSearcher._file_contains_term(file_path, "simple", case_sensitive=True))
+
+    def test_file_contains_term_case_sensitive(self):
+        file_path = self.test_dir / "case.txt"
+        with open(file_path, "w") as f:
+            f.write("Case Sensitive Test")
+
+        # In search_by_content, search_term is lowercased if case_sensitive is False.
+        # But _file_contains_term expects search_term to be consistent with case_sensitive logic.
+
+        # If case_sensitive is False, _file_contains_term lowercases the line.
+        # So we should pass a lowercased search term if we want it to match "Case" with "case".
+
+        # If case_sensitive is True, it does NOT lowercase the line.
+        # So we must pass exact match.
+
+        self.assertTrue(FileSearcher._file_contains_term(file_path, "case", case_sensitive=False))
+        self.assertFalse(FileSearcher._file_contains_term(file_path, "case", case_sensitive=True))
+        self.assertTrue(FileSearcher._file_contains_term(file_path, "Case", case_sensitive=True))
+
+    def test_file_contains_term_not_found(self):
+        file_path = self.test_dir / "missing.txt"
+        with open(file_path, "w") as f:
+            f.write("Nothing here.")
+
+        self.assertFalse(FileSearcher._file_contains_term(file_path, "found", case_sensitive=False))
+
+    def test_file_contains_term_empty(self):
+        file_path = self.test_dir / "empty.txt"
+        file_path.touch()
+
+        self.assertFalse(FileSearcher._file_contains_term(file_path, "anything", case_sensitive=False))
+
+    def test_file_contains_term_utf8(self):
+        file_path = self.test_dir / "utf8.txt"
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write("Hello 🌍 World")
+
+        self.assertTrue(FileSearcher._file_contains_term(file_path, "🌍", case_sensitive=False))

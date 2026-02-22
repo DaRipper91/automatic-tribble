@@ -69,6 +69,17 @@ class FileSearcher:
         chunk_size = 1024 * 1024 # 1MB
 
         try:
+            # We use os.walk here as it is convenient for simple iteration where we need root
+            for root, _, files in os.walk(directory):
+                root_path = Path(root)
+                
+                for file_name in files:
+                    if fnmatch.fnmatch(file_name, file_pattern):
+                        file_path = root_path / file_name
+                        
+                        if self._is_text_file(file_path):
+                            if self._file_contains_term(file_path, search_term, case_sensitive):
+                                results.append(file_path)
             stack = [str(directory)]
             while stack:
                 current_dir = stack.pop()
@@ -176,6 +187,20 @@ class FileSearcher:
 
         self.results = results
         return results
+
+    @staticmethod
+    def _file_contains_term(file_path: Path, search_term: str, case_sensitive: bool) -> bool:
+        """Check if a file contains the search term."""
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if not case_sensitive:
+                        line = line.lower()
+                    if search_term in line:
+                        return True
+        except (IOError, OSError):
+            pass
+        return False
 
     @staticmethod
     def _is_text_file(file_path: Path) -> bool:
