@@ -65,6 +65,29 @@ class FileOrganizer:
         else:
             extension_map = self._build_extension_map(categories)
             
+            # Find matching category
+            category = self._get_file_category(file_path, extension_map)
+            
+            if category:
+                # Create category directory
+                category_dir = target_dir / category
+                category_dir.mkdir(exist_ok=True)
+                
+                # Move or copy file
+                target_path = category_dir / file_path.name
+                target_path = self._get_unique_path(target_path)
+                
+                if move:
+                    shutil.move(str(file_path), str(target_path))
+                else:
+                    shutil.copy2(file_path, target_path)
+                
+                if category not in organized:
+                    organized[category] = []
+                organized[category].append(target_path)
+        
+        self.organized_files = organized
+        return organized
         return self._organize_generic(
             source_dir,
             target_dir,
@@ -146,6 +169,7 @@ class FileOrganizer:
             key_dir.mkdir(parents=True, exist_ok=True)
             
             # Move or copy file
+            target_path = date_dir / file_path.name
             target_path = key_dir / file_path.name
             target_path = self._get_unique_path(target_path)
             
@@ -349,6 +373,13 @@ class FileOrganizer:
     @staticmethod
     def _get_unique_path(target_path: Path) -> Path:
         """
+        Generate a unique path by appending a counter if target exists.
+
+        Args:
+            target_path: Desired target path
+
+        Returns:
+            Unique path that does not currently exist
         Generate a unique path by appending a counter if the path already exists.
 
         Args:
@@ -366,6 +397,8 @@ class FileOrganizer:
         counter = 1
 
         while True:
+            # Use _1, _2, etc. format
+            new_path = parent / f"{stem}_{counter}{suffix}"
             new_name = f"{stem}_{counter}{suffix}"
             new_path = parent / new_name
             if not new_path.exists():

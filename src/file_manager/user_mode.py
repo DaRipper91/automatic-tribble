@@ -208,6 +208,7 @@ class UserModeScreen(Screen):
                 confirm_overwrite
             )
         except Exception as e:
+            self.notify(f"Error {op_ing}: {str(e)}", severity="error")
             self.notify(f"Error moving: {str(e)}", severity="error")
             if target_path.exists():
                 def confirm_overwrite(confirmed: bool) -> None:
