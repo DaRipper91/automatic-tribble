@@ -153,6 +153,54 @@ class UserModeScreen(Screen):
         if selected_path.resolve() == target_path.resolve():
             self.notify(f"Source and destination are the same: {selected_path.name}", severity="warning")
             return
+        active_panel_widget = self.get_active_panel()
+        selected_path = active_panel_widget.get_selected_path()
+
+        if selected_path:
+            target_panel = self.get_inactive_panel()
+            target_dir = target_panel.current_dir
+            target_path = target_dir / selected_path.name
+
+            if target_path.exists():
+                def confirm_overwrite(confirmed: bool) -> None:
+                    if confirmed:
+                        self._background_overwrite(selected_path, target_dir, target_path, target_panel)
+
+                self.app.push_screen(
+                    ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
+                    confirm_overwrite
+                )
+            else:
+                self._background_copy(selected_path, target_dir, target_panel)
+
+    @work(thread=True)
+    def _background_copy(self, source: Path, destination: Path, target_panel: FilePanel) -> None:
+        try:
+            self.file_ops.copy(source, destination)
+            self.app.call_from_thread(self.notify, f"Copied {source.name} to {destination}")
+            self.app.call_from_thread(target_panel.refresh_view)
+        except Exception as e:
+             self.app.call_from_thread(self.notify, f"Error copying: {str(e)}", severity="error")
+
+    @work(thread=True)
+    def _background_overwrite(self, source: Path, destination: Path, target_path: Path, target_panel: FilePanel) -> None:
+        try:
+            self.file_ops.delete(target_path)
+            self.file_ops.copy(source, destination)
+            self.app.call_from_thread(self.notify, f"Overwrote {source.name} in {destination}")
+            self.app.call_from_thread(target_panel.refresh_view)
+        except Exception as e:
+             self.app.call_from_thread(self.notify, f"Error overwriting: {str(e)}", severity="error")
+
+    def action_move(self) -> None:
+        """Move selected file/directory."""
+        active_panel_widget = self.get_active_panel()
+        selected_path = active_panel_widget.get_selected_path()
+
+        if selected_path:
+            target_panel = self.get_inactive_panel()
+            target_dir = target_panel.current_dir
+            target_path = target_dir / selected_path.name
 
         if target_path.exists():
             def confirm_overwrite(confirmed: bool) -> None:
@@ -196,6 +244,66 @@ class UserModeScreen(Screen):
         except Exception as e:
             op_ing = "copying" if operation == "copy" else "moving"
             self.app.call_from_thread(self.notify, f"Error {op_ing}: {str(e)}", severity="error")
+            self.notify(f"{verb} {selected_path.name} to {target_dir}")
+            target_panel.refresh_view()
+        except FileExistsError:
+            def confirm_overwrite(confirmed: bool) -> None:
+                if confirmed:
+                    try:
+                        target_path = target_dir / selected_path.name
+                        self.file_ops.delete(target_path)
+                        self.file_ops.move(selected_path, target_dir)
+                        self.notify(f"Overwrote {selected_path.name} in {target_dir}")
+                        active_panel_widget.refresh_view()
+                        target_panel.refresh_view()
+                    except Exception as e:
+                        self.notify(f"Error overwriting: {str(e)}", severity="error")
+
+            self.app.push_screen(
+                ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
+                confirm_overwrite
+            )
+        except Exception as e:
+            self.notify(f"Error {op_ing}: {str(e)}", severity="error")
+            self.notify(f"Error moving: {str(e)}", severity="error")
+            if target_path.exists():
+                def confirm_overwrite(confirmed: bool) -> None:
+                    if confirmed:
+                        self._background_move_overwrite(selected_path, target_dir, target_path, active_panel_widget, target_panel)
+
+                self.app.push_screen(
+                    ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
+                    confirm_overwrite
+                )
+            else:
+                self._background_move(selected_path, target_dir, active_panel_widget, target_panel)
+
+    @work(thread=True, name="move_worker")
+    def _background_move(self, source: Path, destination: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
+        """
+        Perform move operation in a background thread to prevent UI blocking.
+        """
+        try:
+            self.file_ops.move(source, destination)
+            self.app.call_from_thread(self.notify, f"Moved {source.name} to {destination}")
+            self.app.call_from_thread(source_panel.refresh_view)
+            self.app.call_from_thread(target_panel.refresh_view)
+        except Exception as e:
+            self.app.call_from_thread(self.notify, f"Error moving: {str(e)}", severity="error")
+
+    @work(thread=True, name="move_overwrite_worker")
+    def _background_move_overwrite(self, source: Path, destination: Path, target_path: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
+        """
+        Perform overwrite move operation in a background thread to prevent UI blocking.
+        """
+        try:
+            self.file_ops.delete(target_path)
+            self.file_ops.move(source, destination)
+            self.app.call_from_thread(self.notify, f"Overwrote {source.name} in {destination}")
+            self.app.call_from_thread(source_panel.refresh_view)
+            self.app.call_from_thread(target_panel.refresh_view)
+        except Exception as e:
+            self.app.call_from_thread(self.notify, f"Error overwriting: {str(e)}", severity="error")
 
     def action_delete(self) -> None:
         """Delete selected file/directory."""
@@ -239,13 +347,7 @@ class UserModeScreen(Screen):
             if not dir_name:
                 return
 
-            try:
-                new_path = current_dir / dir_name
-                self.file_ops.create_directory(new_path)
-                self.notify(f"Created directory {dir_name}")
-                active_panel_widget.refresh_view()
-            except Exception as e:
-                self.notify(f"Error creating directory: {str(e)}", severity="error")
+            self._background_create_dir(current_dir, dir_name, active_panel_widget)
 
         self.app.push_screen(
             InputScreen(
@@ -254,6 +356,16 @@ class UserModeScreen(Screen):
             ),
             do_create_dir
         )
+
+    @work(thread=True)
+    def _background_create_dir(self, current_dir: Path, dir_name: str, panel: FilePanel) -> None:
+        try:
+            new_path = current_dir / dir_name
+            self.file_ops.create_directory(new_path)
+            self.app.call_from_thread(self.notify, f"Created directory {dir_name}")
+            self.app.call_from_thread(panel.refresh_view)
+        except Exception as e:
+            self.app.call_from_thread(self.notify, f"Error creating directory: {str(e)}", severity="error")
 
     def action_rename(self) -> None:
         """Rename selected file/directory."""
@@ -265,12 +377,7 @@ class UserModeScreen(Screen):
                 if not new_name or new_name == selected_path.name:
                     return
 
-                try:
-                    self.file_ops.rename(selected_path, new_name)
-                    self.notify(f"Renamed to {new_name}")
-                    active_panel_widget.refresh_view()
-                except Exception as e:
-                    self.notify(f"Error renaming: {str(e)}", severity="error")
+                self._background_rename(selected_path, new_name, active_panel_widget)
 
             self.app.push_screen(
                 InputScreen(
@@ -280,6 +387,15 @@ class UserModeScreen(Screen):
                 ),
                 do_rename
             )
+
+    @work(thread=True)
+    def _background_rename(self, selected_path: Path, new_name: str, panel: FilePanel) -> None:
+        try:
+            self.file_ops.rename(selected_path, new_name)
+            self.app.call_from_thread(self.notify, f"Renamed to {new_name}")
+            self.app.call_from_thread(panel.refresh_view)
+        except Exception as e:
+            self.app.call_from_thread(self.notify, f"Error renaming: {str(e)}", severity="error")
 
     def action_refresh(self) -> None:
         """Refresh both panels."""

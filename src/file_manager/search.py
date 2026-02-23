@@ -1,7 +1,9 @@
 import os
+import io
 import fnmatch
 from pathlib import Path
 from typing import List, Optional, Union
+from .utils import recursive_scan
 
 FILE_TYPE_CHECK_BYTES = 1024
 
@@ -29,7 +31,7 @@ class FileSearcher:
         try:
             if recursive:
                 # Use list() to force iteration and catch errors early if any
-                entries_iter = self._scan_recursive(directory)
+                entries_iter = recursive_scan(directory)
             else:
                 entries_iter = os.scandir(directory)
 
@@ -60,10 +62,20 @@ class FileSearcher:
         Search for files containing specific text.
         """
         results = []
-        
-        # Determine case sensitivity for the search text once
         search_term = search_text if case_sensitive else search_text.lower()
         
+        # Set of known text extensions for quick check
+        text_extensions = {
+            ".txt", ".md", ".py", ".js", ".java", ".c", ".cpp", ".h",
+            ".json", ".xml", ".html", ".css", ".sh", ".bash", ".yaml",
+            ".yml", ".ini", ".cfg", ".conf", ".log", ".csv"
+        }
+        search_len = len(search_term)
+        if search_len == 0:
+            return []
+
+        chunk_size = 1024 * 1024 # 1MB
+
         try:
             # We use os.walk here as it is convenient for simple iteration where we need root
             for root, _, files in os.walk(directory):
@@ -73,18 +85,108 @@ class FileSearcher:
                     if fnmatch.fnmatch(file_name, file_pattern):
                         file_path = root_path / file_name
                         
-                        if self._is_text_file(file_path):
-                            try:
+                        try:
+                            # Check extension first
+                            is_known_text = file_path.suffix.lower() in text_extensions
+
+                            if is_known_text:
+                                # Open as text directly
                                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                                    # Simple line-by-line search for now
                                     for line in f:
                                         if not case_sensitive:
                                             line = line.lower()
                                         if search_term in line:
                                             results.append(file_path)
                                             break
+                            else:
+                                # Not a known extension, check for binary content
+                                # Open as binary to check first few bytes
+                                with open(file_path, "rb") as f:
+                                    chunk = f.read(FILE_TYPE_CHECK_BYTES)
+                                    if b"\x00" in chunk:
+                                        # Binary file, skip
+                                        continue
+
+                                    # It's likely text, rewind and read rest
+                                    f.seek(0)
+
+                                    # Wrap the binary stream with TextIOWrapper
+                                    # This avoids closing and reopening the file
+                                    with io.TextIOWrapper(f, encoding="utf-8", errors="ignore") as text_f:
+                                        for line in text_f:
+                                            if not case_sensitive:
+                                                line = line.lower()
+                                            if search_term in line:
+                                                results.append(file_path)
+                                                break
+                        except (IOError, OSError):
+                            continue
+                        if self._is_text_file(file_path):
+                            if self._file_contains_term(file_path, search_term, case_sensitive):
+                                results.append(file_path)
+            stack = [str(directory)]
+            while stack:
+                current_dir = stack.pop()
+                try:
+                    with os.scandir(current_dir) as it:
+                        for entry in it:
+                            try:
+                                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                    overlap = ""
+                                    while True:
+                                        chunk = f.read(chunk_size)
+                                        if not chunk:
+                                            break
+
+                                        search_chunk = chunk if case_sensitive else chunk.lower()
+
+                                        if search_term in search_chunk:
+                                            results.append(file_path)
+                                            break
+
+                                        # Check boundary
+                                        if overlap:
+                                            # Combine overlap from previous chunk with start of current chunk
+                                            # We only need enough from current chunk to complete a potential match starting in overlap
+                                            boundary = overlap + search_chunk[:search_len - 1]
+                                            if search_term in boundary:
+                                                results.append(file_path)
+                                                break
+
+                                        # Update overlap for next iteration
+                                        # We need the last (search_len - 1) chars from the current chunk
+                                        if len(search_chunk) >= search_len - 1:
+                                            overlap = search_chunk[-(search_len - 1):]
+                                        else:
+                                            # If chunk is tiny, append to overlap
+                                            overlap += search_chunk
                             except (IOError, OSError):
+                                if entry.is_dir(follow_symlinks=False):
+                                    stack.append(entry.path)
+                                    continue
+
+                                if not entry.is_file():
+                                    continue
+
+                                if fnmatch.fnmatch(entry.name, file_pattern):
+                                    file_path = Path(entry.path)
+
+                                    if self._is_text_file(file_path):
+                                        try:
+                                            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                                                # Simple line-by-line search for now
+                                                for line in f:
+                                                    if not case_sensitive:
+                                                        line = line.lower()
+                                                    if search_term in line:
+                                                        results.append(file_path)
+                                                        break
+                                        except (IOError, OSError):
+                                            continue
+                            except OSError:
                                 continue
+                except (PermissionError, OSError):
+                    pass
         except (PermissionError, OSError):
             pass
         
@@ -105,7 +207,7 @@ class FileSearcher:
         
         try:
             if recursive:
-                entries_iter = self._scan_recursive(directory)
+                entries_iter = recursive_scan(directory)
             else:
                 entries_iter = os.scandir(directory)
 
@@ -143,6 +245,19 @@ class FileSearcher:
                             stack.append(entry.path)
             except (PermissionError, OSError):
                 pass
+    @staticmethod
+    def _file_contains_term(file_path: Path, search_term: str, case_sensitive: bool) -> bool:
+        """Check if a file contains the search term."""
+        try:
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                for line in f:
+                    if not case_sensitive:
+                        line = line.lower()
+                    if search_term in line:
+                        return True
+        except (IOError, OSError):
+            pass
+        return False
 
     @staticmethod
     def _is_text_file(file_path: Path) -> bool:

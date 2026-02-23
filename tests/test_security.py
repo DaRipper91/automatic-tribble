@@ -73,10 +73,8 @@ def test_rename_traversal(test_env):
 
     new_name = "../secret/stolen_rename.txt"
 
-    try:
+    with pytest.raises(ValueError, match="Invalid new name"):
         ops.rename(source_file, new_name)
-    except (ValueError, Exception):
-        pass # Expected if fixed
 
     stolen_file = secret_dir / "stolen_rename.txt"
     assert not stolen_file.exists(), "Vulnerability: File was moved out via FileOperations.rename"

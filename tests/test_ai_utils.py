@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch, MagicMock
 import subprocess
+import selectors
 from src.file_manager.ai_utils import AIExecutor
 
 class TestAIExecutor(unittest.TestCase):
@@ -22,13 +23,12 @@ class TestAIExecutor(unittest.TestCase):
         executor = AIExecutor()
         self.assertFalse(executor.is_available())
 
-    @patch('subprocess.run')
+    # Tests for execute_prompt (mocking _run_with_limit)
+
+    @patch.object(AIExecutor, '_run_with_limit')
     def test_execute_prompt_success(self, mock_run):
-        # Mock successful subprocess run
-        mock_result = MagicMock()
-        mock_result.returncode = 0
-        mock_result.stdout = "Successful response"
-        mock_run.return_value = mock_result
+        # Mock successful run
+        mock_run.return_value = (0, "Successful response", "")
 
         response = self.executor.execute_prompt("Hello")
         self.assertEqual(response, "Successful response")
@@ -39,31 +39,104 @@ class TestAIExecutor(unittest.TestCase):
         response = self.executor.execute_prompt("Hello")
         self.assertIn("Error: Gemini CLI not found", response)
 
-    @patch('subprocess.run')
+    @patch.object(AIExecutor, '_run_with_limit')
     def test_execute_prompt_error_return_code(self, mock_run):
         # Mock error return code
-        mock_result = MagicMock()
-        mock_result.returncode = 1
-        mock_result.stderr = "Error message"
-        mock_result.stdout = ""
-        mock_run.return_value = mock_result
+        mock_run.return_value = (1, "", "Error message")
 
         response = self.executor.execute_prompt("Hello")
         self.assertIn("Error (1): Error message", response)
 
-    @patch('subprocess.run')
+    @patch.object(AIExecutor, '_run_with_limit')
     def test_execute_prompt_timeout(self, mock_run):
         mock_run.side_effect = subprocess.TimeoutExpired(cmd=["gemini"], timeout=30)
 
         response = self.executor.execute_prompt("Hello")
         self.assertEqual(response, "Error: Request timed out.")
 
-    @patch('subprocess.run')
+    @patch.object(AIExecutor, '_run_with_limit')
     def test_execute_prompt_exception(self, mock_run):
         mock_run.side_effect = Exception("Something went wrong")
 
         response = self.executor.execute_prompt("Hello")
         self.assertIn("Error executing AI command: Something went wrong", response)
+
+    @patch.object(AIExecutor, '_run_with_limit')
+    def test_execute_prompt_limit_exceeded(self, mock_run):
+        mock_run.side_effect = ValueError("Output exceeded limit")
+
+        response = self.executor.execute_prompt("Hello")
+        self.assertEqual(response, "Error: Output exceeded limit.")
+
+    # Tests for _run_with_limit (mocking Popen and selectors)
+
+    @patch('subprocess.Popen')
+    @patch('selectors.DefaultSelector')
+    def test_run_with_limit_success(self, mock_selector, mock_popen):
+        # Setup mocks
+        mock_process = MagicMock()
+        # Process is already finished when we check it
+        mock_process.poll.return_value = 0
+        mock_process.returncode = 0
+        mock_popen.return_value = mock_process
+
+        mock_stdout = MagicMock()
+        mock_stderr = MagicMock()
+        mock_process.stdout = mock_stdout
+        mock_process.stderr = mock_stderr
+
+        mock_sel_instance = mock_selector.return_value
+
+        # Simulate selector returning one event then empty (finished)
+        key = MagicMock()
+        key.fileobj = mock_stdout
+
+        # select() returns [(key, mask)]
+        mock_sel_instance.select.side_effect = [
+            [(key, selectors.EVENT_READ)], # First iteration: read data
+            [] # Second iteration: no data, process poll checks
+        ]
+
+        # read() returns data then empty
+        mock_stdout.read.side_effect = ["output data", ""]
+
+        returncode, stdout, stderr = self.executor._run_with_limit(["cmd"])
+
+        self.assertEqual(returncode, 0)
+        self.assertEqual(stdout, "output data")
+        self.assertEqual(stderr, "")
+
+    @patch('subprocess.Popen')
+    @patch('selectors.DefaultSelector')
+    def test_run_with_limit_exceeds_size(self, mock_selector, mock_popen):
+        # Setup mocks
+        mock_process = MagicMock()
+        mock_process.poll.return_value = None # Running
+        mock_popen.return_value = mock_process
+
+        mock_stdout = MagicMock()
+        mock_stderr = MagicMock()
+        mock_process.stdout = mock_stdout
+        mock_process.stderr = mock_stderr
+
+        mock_sel_instance = mock_selector.return_value
+
+        key = MagicMock()
+        key.fileobj = mock_stdout
+
+        mock_sel_instance.select.return_value = [(key, selectors.EVENT_READ)]
+
+        # Simulate read returning data larger than limit
+        # Default limit is 10MB
+        mock_stdout.read.return_value = "A" * (10 * 1024 * 1024 + 1)
+
+        with self.assertRaises(ValueError) as cm:
+            self.executor._run_with_limit(["cmd"])
+
+        self.assertEqual(str(cm.exception), "Output exceeded limit")
+        mock_process.kill.assert_called()
+
+    # Tests for generate_automation_command (mocking execute_prompt)
 
     @patch.object(AIExecutor, 'execute_prompt')
     def test_generate_automation_command_success(self, mock_execute):
