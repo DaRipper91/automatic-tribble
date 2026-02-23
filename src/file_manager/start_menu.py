@@ -4,8 +4,8 @@ Start Menu Screen for File Manager AI
 
 from textual.app import ComposeResult
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Button, Label, Static
-from textual.containers import Container, Vertical, Center
+from textual.widgets import Header, Footer, Button, Label
+from textual.containers import Container, Vertical
 
 from .user_mode import UserModeScreen
 from .ai_mode import AIModeScreen

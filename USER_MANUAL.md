@@ -11,6 +11,9 @@ Welcome to the **TFM (The Future Manager)** User Manual. This guide provides com
 3.  [AI Mode (Automation)](#-ai-mode-automation)
 4.  [CLI Automation (tfm-auto)](#-cli-automation-tfm-auto)
 5.  [Advanced Features](#-advanced-features)
+    - [Undo/Redo System](#-undoredo-system)
+    - [Plugin System](#-plugin-system)
+    - [Configuration](#-configuration)
 6.  [Troubleshooting](#-troubleshooting)
 
 ---
@@ -77,7 +80,7 @@ User Mode is a dual-pane file manager designed for speed and keyboard efficiency
 | **Operations** | | |
 | `c` | Copy | Copy selected item to the *inactive* panel. |
 | `m` | Move | Move selected item to the *inactive* panel. |
-| `d` | Delete | Delete selected item (with confirmation). |
+| `d` | Delete | Delete selected item (moved to Trash). |
 | `n` | New Directory | Create a new folder in the current directory. |
 | `r` | Rename | Rename the selected file or folder. |
 | **General** | | |
@@ -86,8 +89,9 @@ User Mode is a dual-pane file manager designed for speed and keyboard efficiency
 | `q` | Quit | Exit the application completely. |
 
 ### 💡 Tips
-- **Async Deletion**: Deleting large folders happens in the background, so the UI won't freeze.
-- **Overwrite Safety**: If you try to copy/move a file that already exists, TFM will ask for confirmation before overwriting.
+- **Async Operations**: Copying, moving, and deleting files happen in the background, keeping the UI responsive.
+- **Undo/Redo**: Core operations are tracked. You can undo mistakes using the CLI (`tfm-auto --undo`).
+- **Safe Delete**: Deleted files are moved to `~/.tfm/trash/` instead of being permanently removed immediately.
 
 ---
 
@@ -101,12 +105,7 @@ AI Mode uses natural language processing to understand your intent and execute c
     - *Example:* "Organize all PDFs into a Documents folder."
     - *Example:* "Find and delete duplicate images."
 3.  **Process**: Click **Process** or press `Enter`.
-4.  **Review & Execute**: The AI will propose a **multi-step plan** in the log window. Review the steps carefully.
-5.  **Confirm**: Click the "Confirm & Execute" button to run the plan.
-
-### 📜 Command History
-- Use `↑` / `↓` arrows in the command input to cycle through your recent commands.
-- Click **"Search History"** to see a list of your past successful commands.
+4.  **Review & Execute**: The AI will propose a plan. Review it and confirm execution.
 
 ### ✨ Quick Actions
 The left panel provides buttons for common tasks:
@@ -120,9 +119,7 @@ The left panel provides buttons for common tasks:
 
 ## ⚡ CLI Automation (`tfm-auto`)
 
-For scripting and cron jobs, use the command-line interface.
-
-*(Note: If `tfm-auto` is not available, use `python src/file_manager/cli.py`)*
+For scripting and cron jobs, use the command-line interface. Use `--json` flag for machine-readable output.
 
 ### 1. Organize Files
 Sort files into folders based on their extension or modification date.
@@ -135,16 +132,16 @@ tfm-auto organize --source ./Photos --target ./Archive --by-date --move
 ```
 
 ### 2. Search
-Find files by name, content, or tags.
+Find files by name pattern or content.
 ```bash
 # Find all Python files
 tfm-auto search --dir ./Project --name "*.py"
 
-# Find files containing specific text
+# Find files containing specific text (case-insensitive)
 tfm-auto search --dir ./Notes --content "meeting notes"
 
-# Find files by tag
-tfm-auto search --tag "work"
+# Output results as JSON
+tfm-auto search --dir ./Notes --content "TODO" --json
 ```
 
 ### 3. Cleanup
@@ -157,11 +154,23 @@ tfm-auto cleanup --dir ./Temp --days 60 --recursive
 tfm-auto cleanup --dir ./Temp --days 60 --dry-run
 ```
 
-### 4. Find Duplicates
-Scan a directory for identical files (based on content hash).
+### 4. Find & Resolve Duplicates
+Scan a directory for identical files. The system uses a multi-pass strategy (size -> partial hash -> full hash) for efficiency.
+
 ```bash
+# Find duplicates
 tfm-auto duplicates --dir ./Photos --recursive
+
+# Resolve duplicates by keeping the newest version automatically
+tfm-auto duplicates --dir ./Photos --resolve newest
+
+# Resolve duplicates by keeping the oldest version
+tfm-auto duplicates --dir ./Photos --resolve oldest
 ```
+**Resolution Strategies:**
+- `newest`: Keeps the file with the most recent modification time.
+- `oldest`: Keeps the file with the oldest modification time.
+- `interactive`: (Not currently supported in CLI) Prompts you to choose which file to keep.
 
 ### 5. Batch Rename
 Rename multiple files using a simple pattern match.
@@ -170,51 +179,82 @@ Rename multiple files using a simple pattern match.
 tfm-auto rename --dir ./Photos --pattern "IMG_" --replacement "Vacation_"
 ```
 
-### 6. Manage Tags
-Tag files for easy retrieval.
+### 6. Undo / Redo
+Revert accidental changes. The history is persisted to `~/.tfm/history.pkl`.
 ```bash
-# Add a tag
-tfm-auto tags --add ./report.pdf --tag work
+# Undo the last operation
+tfm-auto --undo
 
-# Search by tag
-tfm-auto tags --search work
-
-# List all tags
-tfm-auto tags --list
-
-# Export tags
-tfm-auto tags --export
+# Redo the last undone operation
+tfm-auto --redo
 ```
 
-### 7. Schedule Tasks
-Schedule recurring automation tasks.
+### 7. Configuration
+Manage settings.
 ```bash
-# Add a daily cleanup task
-tfm-auto schedule --add "Daily Cleanup" --cron "0 0 * * *" --target ~/Downloads --type cleanup --params '{"days": 30}'
-
-# List scheduled tasks
-tfm-auto schedule --list
-
-# Run scheduler daemon
-tfm-auto schedule --daemon
+# Open configuration file in default editor
+tfm-auto config --edit
 ```
 
 ---
 
-## 🔧 Advanced Features
+## ⚙️ Advanced Features
 
-### 📅 Scheduler Daemon
-To keep your scheduled tasks running, start the scheduler daemon:
+### 🔄 Undo/Redo System
+TFM tracks all destructive operations (Move, Copy, Delete, Rename, Create Directory).
+- **Storage**: History is saved in `~/.tfm/history.pkl`, so it persists between sessions.
+- **Limit**: The undo stack is currently unbounded (until cleared manually or by file size limits in future versions).
+- **Usage**: You can use `tfm-auto --undo` or `tfm-auto --redo` at any time.
+
+### 🔌 Plugin System
+Extend functionality by adding Python scripts to `~/.tfm/plugins/`.
+
+1.  **Create the directory**:
+    ```bash
+    mkdir -p ~/.tfm/plugins
+    ```
+2.  **Create a plugin file** (e.g., `my_plugin.py`):
+    ```python
+    from src.file_manager.plugins import TFMPlugin
+
+    class MyPlugin(TFMPlugin):
+        def on_file_added(self, path):
+            print(f"Plugin: File added at {path}")
+
+        def on_file_deleted(self, path):
+            print(f"Plugin: File deleted at {path}")
+    ```
+3.  **Restart TFM**: The plugin will be automatically loaded.
+
+**Available Hooks:**
+- `on_file_added(path)`
+- `on_file_deleted(path)`
+- `on_organize(source, destination)`
+- `on_search_complete(query, results)`
+
+### 🛠️ Configuration
+File categories can be customized in `~/.tfm/categories.yaml`.
+Default categories include: `images`, `videos`, `documents`, `archives`, `code`, `data`.
+
+To edit the configuration:
 ```bash
-python -m file_manager.scheduler --daemon
+tfm-auto config --edit
 ```
-The daemon logs activity to `~/.tfm/scheduler.log`.
 
-### 🗂️ File Tagging
-Tags are stored in a local SQLite database at `~/.tfm/tags.db`. You can use them to organize files across different directories without moving them.
+**Example `categories.yaml`:**
+```yaml
+images:
+  - .jpg
+  - .png
+  - .gif
+documents:
+  - .pdf
+  - .docx
+  - .txt
+```
 
-### 🧠 AI Context
-The AI engine automatically analyzes your directory (file counts, sizes, types) to generate smarter plans. It caches this context for 60 seconds to improve performance.
+### 🔍 Logging
+All operations are logged. You can create a plugin to redirect logs to a specific file or external service. By default, errors are printed to stderr and info to stdout (or `rich` console).
 
 ---
 
@@ -222,14 +262,11 @@ The AI engine automatically analyzes your directory (file counts, sizes, types) 
 
 ### Common Issues
 
-**`ModuleNotFoundError: No module named 'textual'`**
+**`ModuleNotFoundError: No module named 'rich'`**
 - **Solution**: You are missing dependencies. Run `pip install -r requirements.txt`.
 
 **`tfm-auto: command not found`**
 - **Solution**: You haven't installed the package in editable mode. Use `pip install -e .` or execute via `python src/file_manager/cli.py`.
-
-**UI looks broken or weird characters appear**
-- **Solution**: Ensure your terminal supports UTF-8 and 256 colors. Try running `export TERM=xterm-256color` before starting the app.
 
 **"Access Denied" errors**
 - **Solution**: Ensure you have read/write permissions for the directories you are trying to modify.

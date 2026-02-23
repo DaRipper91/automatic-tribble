@@ -152,20 +152,20 @@ class UserModeScreen(Screen):
             else:
                 self._background_copy(selected_path, target_dir, target_panel)
 
-    @work(thread=True)
-    def _background_copy(self, source: Path, destination: Path, target_panel: FilePanel) -> None:
+    @work
+    async def _background_copy(self, source: Path, destination: Path, target_panel: FilePanel) -> None:
         try:
-            self.file_ops.copy(source, destination)
+            await self.file_ops.copy(source, destination)
             self.app.call_from_thread(self.notify, f"Copied {source.name} to {destination}")
             self.app.call_from_thread(target_panel.refresh_view)
         except Exception as e:
              self.app.call_from_thread(self.notify, f"Error copying: {str(e)}", severity="error")
 
-    @work(thread=True)
-    def _background_overwrite(self, source: Path, destination: Path, target_path: Path, target_panel: FilePanel) -> None:
+    @work
+    async def _background_overwrite(self, source: Path, destination: Path, target_path: Path, target_panel: FilePanel) -> None:
         try:
-            self.file_ops.delete(target_path)
-            self.file_ops.copy(source, destination)
+            await self.file_ops.delete(target_path)
+            await self.file_ops.copy(source, destination)
             self.app.call_from_thread(self.notify, f"Overwrote {source.name} in {destination}")
             self.app.call_from_thread(target_panel.refresh_view)
         except Exception as e:
@@ -176,46 +176,38 @@ class UserModeScreen(Screen):
         active_panel_widget = self.get_active_panel()
         selected_path = active_panel_widget.get_selected_path()
 
-        if not selected_path:
-            return
+        if selected_path:
+            target_panel = self.get_inactive_panel()
+            target_dir = target_panel.current_dir
+            target_path = target_dir / selected_path.name
 
-        target_panel = self.get_inactive_panel()
-        target_dir = target_panel.current_dir
-        target_path = target_dir / selected_path.name
+            if target_path.exists():
+                def confirm_overwrite(confirmed: bool) -> None:
+                    if confirmed:
+                        self._background_move_overwrite(selected_path, target_dir, target_path, active_panel_widget, target_panel)
 
-        if target_path.exists():
-            def confirm_overwrite(confirmed: bool) -> None:
-                if confirmed:
-                    self._background_move_overwrite(selected_path, target_dir, target_path, active_panel_widget, target_panel)
+                self.app.push_screen(
+                    ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
+                    confirm_overwrite
+                )
+            else:
+                self._background_move(selected_path, target_dir, active_panel_widget, target_panel)
 
-            self.app.push_screen(
-                ConfirmationScreen(f"File {selected_path.name} exists. Overwrite?"),
-                confirm_overwrite
-            )
-        else:
-            self._background_move(selected_path, target_dir, active_panel_widget, target_panel)
-
-    @work(thread=True, name="move_worker")
-    def _background_move(self, source: Path, destination: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
-        """
-        Perform move operation in a background thread to prevent UI blocking.
-        """
+    @work
+    async def _background_move(self, source: Path, destination: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
         try:
-            self.file_ops.move(source, destination)
+            await self.file_ops.move(source, destination)
             self.app.call_from_thread(self.notify, f"Moved {source.name} to {destination}")
             self.app.call_from_thread(source_panel.refresh_view)
             self.app.call_from_thread(target_panel.refresh_view)
         except Exception as e:
             self.app.call_from_thread(self.notify, f"Error moving: {str(e)}", severity="error")
 
-    @work(thread=True, name="move_overwrite_worker")
-    def _background_move_overwrite(self, source: Path, destination: Path, target_path: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
-        """
-        Perform overwrite move operation in a background thread to prevent UI blocking.
-        """
+    @work
+    async def _background_move_overwrite(self, source: Path, destination: Path, target_path: Path, source_panel: FilePanel, target_panel: FilePanel) -> None:
         try:
-            self.file_ops.delete(target_path)
-            self.file_ops.move(source, destination)
+            await self.file_ops.delete(target_path)
+            await self.file_ops.move(source, destination)
             self.app.call_from_thread(self.notify, f"Overwrote {source.name} in {destination}")
             self.app.call_from_thread(source_panel.refresh_view)
             self.app.call_from_thread(target_panel.refresh_view)
@@ -230,22 +222,17 @@ class UserModeScreen(Screen):
         if selected_path:
             def check_confirm(confirmed: bool) -> None:
                 if confirmed:
-                    # Run deletion in a worker thread to keep UI responsive
-                    self.run_worker(
-                        lambda: self._perform_delete(selected_path, active_panel_widget),
-                        thread=True,
-                        name=f"delete-{selected_path.name}"
-                    )
+                    self._perform_delete(selected_path, active_panel_widget)
 
             self.app.push_screen(
                 ConfirmationScreen(f"Are you sure you want to delete {selected_path.name}?"),
                 check_confirm
             )
 
-    def _perform_delete(self, path, panel) -> None:
-        """Background task to perform deletion."""
+    @work
+    async def _perform_delete(self, path: Path, panel: FilePanel) -> None:
         try:
-            self.file_ops.delete(path)
+            await self.file_ops.delete(path)
             self.app.call_from_thread(self.notify, f"Deleted {path.name}")
             self.app.call_from_thread(panel.refresh_view)
         except Exception as e:
@@ -274,11 +261,11 @@ class UserModeScreen(Screen):
             do_create_dir
         )
 
-    @work(thread=True)
-    def _background_create_dir(self, current_dir: Path, dir_name: str, panel: FilePanel) -> None:
+    @work
+    async def _background_create_dir(self, current_dir: Path, dir_name: str, panel: FilePanel) -> None:
         try:
             new_path = current_dir / dir_name
-            self.file_ops.create_directory(new_path)
+            await self.file_ops.create_directory(new_path)
             self.app.call_from_thread(self.notify, f"Created directory {dir_name}")
             self.app.call_from_thread(panel.refresh_view)
         except Exception as e:
@@ -305,10 +292,10 @@ class UserModeScreen(Screen):
                 do_rename
             )
 
-    @work(thread=True)
-    def _background_rename(self, selected_path: Path, new_name: str, panel: FilePanel) -> None:
+    @work
+    async def _background_rename(self, selected_path: Path, new_name: str, panel: FilePanel) -> None:
         try:
-            self.file_ops.rename(selected_path, new_name)
+            await self.file_ops.rename(selected_path, new_name)
             self.app.call_from_thread(self.notify, f"Renamed to {new_name}")
             self.app.call_from_thread(panel.refresh_view)
         except Exception as e:
