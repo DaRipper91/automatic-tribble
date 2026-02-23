@@ -3,7 +3,7 @@
 Main application entry point for File Manager
 """
 
-from textual.app import App, ComposeResult
+from textual.app import App
 from textual.binding import Binding
 
 from .start_menu import StartMenuScreen
