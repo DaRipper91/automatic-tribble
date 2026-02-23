@@ -2,16 +2,61 @@
 AI Mode Screen - Automation Interface
 """
 
+import json
+import os
 from pathlib import Path
+from datetime import datetime
+from typing import List, Dict, Any
+
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Button, Label, Input, Static, RichLog
+from textual.containers import Container, Horizontal, Vertical
+from textual.widgets import Header, Footer, Button, Label, Input, RichLog
 from textual.screen import Screen
 from textual.binding import Binding
 from textual import work
 
 from .ai_integration import GeminiClient
-from .screens import ConfirmationScreen
+from .screens import ConfirmationScreen, InputScreen
+
+
+class CommandHistoryManager:
+    """Manages command history persistence."""
+
+    def __init__(self):
+        self.history_file = Path.home() / ".tfm" / "command_history.json"
+        self.history_file.parent.mkdir(parents=True, exist_ok=True)
+        self.history: List[Dict[str, Any]] = self._load_history()
+
+    def _load_history(self) -> List[Dict[str, Any]]:
+        if not self.history_file.exists():
+            return []
+        try:
+            with open(self.history_file, "r") as f:
+                return json.load(f)
+        except Exception:
+            return []
+
+    def add_entry(self, command: str, plan: Dict[str, Any], status: str):
+        entry = {
+            "timestamp": datetime.now().isoformat(),
+            "command": command,
+            "plan": plan,
+            "status": status
+        }
+        self.history.insert(0, entry) # Newest first
+        # Limit to 100 entries
+        self.history = self.history[:100]
+        self._save_history()
+
+    def _save_history(self):
+        try:
+            with open(self.history_file, "w") as f:
+                json.dump(self.history, f, indent=2)
+        except Exception:
+            pass
+
+    def get_recent_commands(self) -> List[str]:
+        return [entry["command"] for entry in self.history]
 
 
 class AIModeScreen(Screen):
@@ -66,12 +111,17 @@ class AIModeScreen(Screen):
 
     BINDINGS = [
         Binding("escape", "back_to_menu", "Back to Menu", priority=True),
+        Binding("up", "history_up", "History Up", show=False),
+        Binding("down", "history_down", "History Down", show=False),
     ]
 
     def __init__(self):
         super().__init__()
         self.gemini_client = GeminiClient()
         self.current_dir = Path.cwd()
+        self.history_manager = CommandHistoryManager()
+        self.history_index = -1
+        self.current_plan: Dict[str, Any] = {}
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -86,6 +136,8 @@ class AIModeScreen(Screen):
                     yield Button("Cleanup Old Files", id="btn_cleanup", classes="action-btn")
                     yield Button("Find Duplicates", id="btn_duplicates", classes="action-btn")
                     yield Button("Batch Rename", id="btn_rename", classes="action-btn")
+                    yield Label("History", classes="section-title")
+                    yield Button("Search History", id="btn_history_search", classes="action-btn")
 
                 # Right Panel: Interaction
                 with Vertical(id="right-panel"):
@@ -113,6 +165,28 @@ class AIModeScreen(Screen):
         """Return to the main menu."""
         self.app.pop_screen()
 
+    def action_history_up(self) -> None:
+        """Cycle history up."""
+        commands = self.history_manager.get_recent_commands()
+        if not commands:
+            return
+
+        if self.history_index < len(commands) - 1:
+            self.history_index += 1
+            input_widget = self.query_one("#command_input", Input)
+            input_widget.value = commands[self.history_index]
+
+    def action_history_down(self) -> None:
+        """Cycle history down."""
+        if self.history_index > -1:
+            self.history_index -= 1
+            input_widget = self.query_one("#command_input", Input)
+            if self.history_index == -1:
+                input_widget.value = ""
+            else:
+                commands = self.history_manager.get_recent_commands()
+                input_widget.value = commands[self.history_index]
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses."""
         btn_id = event.button.id
@@ -135,6 +209,8 @@ class AIModeScreen(Screen):
         elif btn_id == "btn_rename":
             command_input.value = "Rename files matching 'pattern' to 'replacement'"
             command_input.focus()
+        elif btn_id == "btn_history_search":
+            self._show_history_search()
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         """Handle input submission (Enter key)."""
@@ -147,16 +223,31 @@ class AIModeScreen(Screen):
         log.write(message)
 
     @work(thread=True)
-    def _execute_command_worker(self, action_data: dict) -> None:
-        """Execute the command in a worker thread."""
-        self.app.call_from_thread(self._log_message, "[dim]Executing...[/]")
+    def _execute_plan_worker(self, plan_data: Dict[str, Any]) -> None:
+        """Execute the plan in a worker thread."""
+        self.app.call_from_thread(self._log_message, "\n[bold blue]Executing Plan...[/]")
 
-        result = self.gemini_client.execute_command(action_data)
+        steps = plan_data.get("plan", [])
+        success = True
 
-        if result.startswith("Error"):
-            self.app.call_from_thread(self._log_message, f"[bold red]Result:[/ bold red] {result}")
+        for i, step in enumerate(steps, 1):
+            desc = step.get("description", "Unknown Step")
+            self.app.call_from_thread(self._log_message, f"[dim]Step {i}/{len(steps)}: {desc}[/]")
+
+            result = self.gemini_client.execute_step(step)
+
+            if result.startswith("Error"):
+                self.app.call_from_thread(self._log_message, f"[bold red]FAILED:[/ bold red] {result}")
+                success = False
+                break # Stop on error? or continue? Usually stop.
+            else:
+                self.app.call_from_thread(self._log_message, f"[bold green]OK:[/ bold green] {result}")
+
+        if success:
+            self.app.call_from_thread(self._log_message, "[bold green]All steps completed successfully.[/]")
+            self.app.call_from_thread(self.history_manager.add_entry, self.query_one("#command_input", Input).value, plan_data, "success")
         else:
-            self.app.call_from_thread(self._log_message, f"[bold green]Result:[/ bold green] {result}")
+             self.app.call_from_thread(self.history_manager.add_entry, self.query_one("#command_input", Input).value, plan_data, "failed")
 
     def _process_command(self) -> None:
         """Process the current command."""
@@ -179,30 +270,71 @@ class AIModeScreen(Screen):
         log.write(f"\n[bold blue]Processing command:[/] {command_text}")
         log.write(f"[dim]Context: {target_path}[/]")
 
-        # 1. Process with Gemini Mock
-        action_data = self.gemini_client.process_command(command_text, target_path)
+        # Generate Plan
+        plan_data = self.gemini_client.get_plan(command_text, target_path)
 
-        if action_data["action"] == "unknown":
-            log.write(f"[bold red]AI:[/ bold red] {action_data['description']}")
-            return
+        # Check for error in plan generation
+        if not plan_data or "plan" not in plan_data:
+             log.write("[bold red]Error:[/ bold red] Failed to generate plan.")
+             return
 
-        log.write(f"[bold purple]AI Plan:[/ bold purple] {action_data['description']}")
+        first_step = plan_data["plan"][0]
+        if first_step.get("action") == "error":
+             log.write(f"[bold red]AI Error:[/ bold red] {first_step.get('description')}")
+             return
 
-        # 2. Execute
+        self.current_plan = plan_data
+
+        # Display Plan (Dry Run)
+        log.write(f"\n[bold purple]Proposed Plan ({len(plan_data['plan'])} steps):[/]")
+        for i, step in enumerate(plan_data["plan"], 1):
+            color = "red" if step.get("is_destructive") else "green"
+            icon = "⚠️" if step.get("is_destructive") else "ℹ️"
+            log.write(f"{i}. [{color}]{icon} {step.get('description')}[/]")
+            # log.write(f"   [dim]{step.get('action')} {step.get('params')}[/]") # Optional detailed view
+
+        # Confirmation
         def check_confirm(confirmed: bool) -> None:
             if confirmed:
-                self._execute_command_worker(action_data)
+                self._execute_plan_worker(plan_data)
             else:
-                log.write("[yellow]Command cancelled.[/]")
+                log.write("[yellow]Plan cancelled.[/]")
+                self.history_manager.add_entry(command_text, plan_data, "cancelled")
 
         self.app.push_screen(
             ConfirmationScreen(
-                f"Execute command:\n{action_data['description']}?",
-                confirm_label="Execute",
+                f"Execute {len(plan_data['plan'])} steps?",
+                confirm_label="Confirm & Execute",
                 confirm_variant="success"
             ),
             check_confirm
         )
 
-        # Clear input? Maybe keep it for reference.
-        # command_input.value = ""
+    def _show_history_search(self):
+        """Show history search dialog."""
+        def do_search(query: str) -> None:
+            if not query:
+                return
+            self._perform_history_search(query)
+
+        self.app.push_screen(
+            InputScreen("Search History", "Enter search query:"),
+            do_search
+        )
+
+    @work(thread=True)
+    def _perform_history_search(self, query: str) -> None:
+        """Perform search in background."""
+        log = self.query_one("#output_log", RichLog)
+        commands = self.history_manager.get_recent_commands()
+
+        self.app.call_from_thread(log.write, f"\n[bold blue]Searching history for:[/] '{query}'...")
+
+        matches = self.gemini_client.search_history(query, commands)
+
+        if matches:
+            self.app.call_from_thread(log.write, "[bold green]Found matches:[/]")
+            for match in matches:
+                self.app.call_from_thread(log.write, f"- {match}")
+        else:
+            self.app.call_from_thread(log.write, "[yellow]No matching commands found.[/]")

@@ -10,7 +10,8 @@ Welcome to the **TFM (The Future Manager)** User Manual. This guide provides com
 2.  [User Mode (Interactive TUI)](#-user-mode-interactive-tui)
 3.  [AI Mode (Automation)](#-ai-mode-automation)
 4.  [CLI Automation (tfm-auto)](#-cli-automation-tfm-auto)
-5.  [Troubleshooting](#-troubleshooting)
+5.  [Advanced Features](#-advanced-features)
+6.  [Troubleshooting](#-troubleshooting)
 
 ---
 
@@ -100,7 +101,12 @@ AI Mode uses natural language processing to understand your intent and execute c
     - *Example:* "Organize all PDFs into a Documents folder."
     - *Example:* "Find and delete duplicate images."
 3.  **Process**: Click **Process** or press `Enter`.
-4.  **Review & Execute**: The AI will propose a plan. Review it and confirm execution.
+4.  **Review & Execute**: The AI will propose a **multi-step plan** in the log window. Review the steps carefully.
+5.  **Confirm**: Click the "Confirm & Execute" button to run the plan.
+
+### 📜 Command History
+- Use `↑` / `↓` arrows in the command input to cycle through your recent commands.
+- Click **"Search History"** to see a list of your past successful commands.
 
 ### ✨ Quick Actions
 The left panel provides buttons for common tasks:
@@ -129,13 +135,16 @@ tfm-auto organize --source ./Photos --target ./Archive --by-date --move
 ```
 
 ### 2. Search
-Find files by name pattern or content.
+Find files by name, content, or tags.
 ```bash
 # Find all Python files
 tfm-auto search --dir ./Project --name "*.py"
 
 # Find files containing specific text
 tfm-auto search --dir ./Notes --content "meeting notes"
+
+# Find files by tag
+tfm-auto search --tag "work"
 ```
 
 ### 3. Cleanup
@@ -160,6 +169,52 @@ Rename multiple files using a simple pattern match.
 # Rename "IMG_*" to "Vacation_*"
 tfm-auto rename --dir ./Photos --pattern "IMG_" --replacement "Vacation_"
 ```
+
+### 6. Manage Tags
+Tag files for easy retrieval.
+```bash
+# Add a tag
+tfm-auto tags --add ./report.pdf --tag work
+
+# Search by tag
+tfm-auto tags --search work
+
+# List all tags
+tfm-auto tags --list
+
+# Export tags
+tfm-auto tags --export
+```
+
+### 7. Schedule Tasks
+Schedule recurring automation tasks.
+```bash
+# Add a daily cleanup task
+tfm-auto schedule --add "Daily Cleanup" --cron "0 0 * * *" --target ~/Downloads --type cleanup --params '{"days": 30}'
+
+# List scheduled tasks
+tfm-auto schedule --list
+
+# Run scheduler daemon
+tfm-auto schedule --daemon
+```
+
+---
+
+## 🔧 Advanced Features
+
+### 📅 Scheduler Daemon
+To keep your scheduled tasks running, start the scheduler daemon:
+```bash
+python -m file_manager.scheduler --daemon
+```
+The daemon logs activity to `~/.tfm/scheduler.log`.
+
+### 🗂️ File Tagging
+Tags are stored in a local SQLite database at `~/.tfm/tags.db`. You can use them to organize files across different directories without moving them.
+
+### 🧠 AI Context
+The AI engine automatically analyzes your directory (file counts, sizes, types) to generate smarter plans. It caches this context for 60 seconds to improve performance.
 
 ---
 
