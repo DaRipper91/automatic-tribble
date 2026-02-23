@@ -5,6 +5,7 @@ File operations module for copy, move, delete, etc.
 import asyncio
 import os
 import shutil
+import uuid
 from pathlib import Path
 from typing import Union, List, Optional
 from dataclasses import dataclass, field
@@ -88,6 +89,7 @@ class OperationHistory:
         """Clear the history."""
         self._undo_stack.clear()
         self._redo_stack.clear()
+        self._save()
 
 
 class FileOperations:
@@ -197,7 +199,8 @@ class FileOperations:
         
         try:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            trash_name = f"{path.name}_{timestamp}"
+            unique_id = uuid.uuid4().hex[:8]
+            trash_name = f"{path.name}_{timestamp}_{unique_id}"
             trash_path = self.trash_dir / trash_name
 
             # Use move for deletion (trash)
@@ -226,13 +229,11 @@ class FileOperations:
         """
         path = Path(path)
         try:
+            existed_before = path.exists()
             await asyncio.to_thread(path.mkdir, parents=True, exist_ok=exist_ok)
 
-            if not exist_ok: # Only log if we are creating new
+            if not existed_before:
                  self.history.log_operation(FileOperation(OperationType.CREATE_DIR, path))
-            else:
-                 if not path.exists():
-                     self.history.log_operation(FileOperation(OperationType.CREATE_DIR, path))
 
             self.plugins.on_file_added(path)
             logger.info(f"Created directory {path}")
