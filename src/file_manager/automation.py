@@ -5,7 +5,7 @@ Automation features for file organization and management.
 import hashlib
 import shutil
 from pathlib import Path
-from typing import Dict, List, Callable, Optional, Union
+from typing import Dict, List, Callable, Optional, Union, Iterator
 from datetime import datetime, timedelta
 import os
 from .utils import recursive_scan
@@ -183,21 +183,11 @@ class FileOrganizer:
         cutoff_time = datetime.now().timestamp() - (days_old * SECONDS_PER_DAY)
         old_files = []
         
-        if recursive:
-            for root, _, files in os.walk(directory):
-                root_path = Path(root)
-                for file_name in files:
-                    file_path = root_path / file_name
-                    if file_path.stat().st_mtime < cutoff_time:
-                        old_files.append(file_path)
-                        if not dry_run:
-                            file_path.unlink()
-        else:
-            for file_path in directory.iterdir():
-                if file_path.is_file() and file_path.stat().st_mtime < cutoff_time:
-                    old_files.append(file_path)
-                    if not dry_run:
-                        file_path.unlink()
+        for file_path in self._iter_files(directory, recursive):
+            if file_path.stat().st_mtime < cutoff_time:
+                old_files.append(file_path)
+                if not dry_run:
+                    file_path.unlink()
         
         return old_files
     
@@ -283,6 +273,39 @@ class FileOrganizer:
         
         return result
 
+    def _scan_recursive(self, directory: Union[Path, str]):
+        """Recursively scan directory using os.scandir."""
+        try:
+            with os.scandir(directory) as it:
+                for entry in it:
+                    if entry.is_dir(follow_symlinks=False):
+                        yield from self._scan_recursive(entry.path)
+                    elif entry.is_file(follow_symlinks=True):
+                        yield entry
+        except (PermissionError, OSError):
+            pass
+    
+    def _iter_files(self, directory: Path, recursive: bool) -> Iterator[Path]:
+        """
+        Iterate over files in a directory, optionally recursively.
+
+        Args:
+            directory: Base directory to iterate
+            recursive: Whether to iterate recursively
+
+        Yields:
+            Path objects for each file found
+        """
+        if recursive:
+            for root, _, files in os.walk(directory):
+                root_path = Path(root)
+                for file_name in files:
+                    yield root_path / file_name
+        else:
+            for file_path in directory.iterdir():
+                if file_path.is_file():
+                    yield file_path
+
     def batch_rename(
         self,
         directory: Path,
@@ -307,37 +330,19 @@ class FileOrganizer:
 
         renamed_files = []
         
-        if recursive:
-            for root, _, files in os.walk(directory):
-                root_path = Path(root)
-                for file_name in files:
-                    if pattern in file_name:
-                        old_path = root_path / file_name
-                        new_name = file_name.replace(pattern, replacement)
+        for file_path in self._iter_files(directory, recursive):
+            if pattern in file_path.name:
+                new_name = file_path.name.replace(pattern, replacement)
 
-                        # Secure against path traversal
-                        if any(sep in new_name for sep in [os.sep, os.altsep] if sep) or new_name in ('.', '..'):
-                            continue
+                # Secure against path traversal
+                if any(sep in new_name for sep in [os.sep, os.altsep] if sep) or new_name in ('.', '..'):
+                    continue
 
-                        new_path = root_path / new_name
-                        
-                        if not new_path.exists():
-                            old_path.rename(new_path)
-                            renamed_files.append(new_path)
-        else:
-            for file_path in directory.iterdir():
-                if file_path.is_file() and pattern in file_path.name:
-                    new_name = file_path.name.replace(pattern, replacement)
+                new_path = file_path.parent / new_name
 
-                    # Secure against path traversal
-                    if any(sep in new_name for sep in [os.sep, os.altsep] if sep) or new_name in ('.', '..'):
-                        continue
-
-                    new_path = file_path.parent / new_name
-                    
-                    if not new_path.exists():
-                        file_path.rename(new_path)
-                        renamed_files.append(new_path)
+                if not new_path.exists():
+                    file_path.rename(new_path)
+                    renamed_files.append(new_path)
         
         return renamed_files
     
