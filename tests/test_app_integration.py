@@ -3,17 +3,29 @@ from pathlib import Path
 from textual.pilot import Pilot
 from src.file_manager.app import FileManagerApp
 from src.file_manager.screens import InputScreen
+from src.file_manager.user_mode import UserModeScreen
+from src.file_manager.file_panel import FilePanel
 from textual.widgets import Input
 
 @pytest.mark.asyncio
 async def test_action_new_dir_creates_directory(tmp_path):
     # Setup
     app = FileManagerApp()
-    app.left_path = tmp_path
-    app.right_path = tmp_path
 
     async with app.run_test() as pilot:
-        # Trigger action_new_dir
+        # Navigate to User Mode
+        await pilot.click("#user_mode")
+        await pilot.pause()
+
+        # Ensure we are on UserModeScreen
+        assert isinstance(app.screen, UserModeScreen)
+
+        # Update left panel to tmp_path
+        left_panel = app.screen.query_one("#left-panel", FilePanel)
+        left_panel.current_dir = tmp_path
+        left_panel.refresh_view()
+
+        # Trigger action_new_dir (n)
         await pilot.press("n")
 
         # Expect InputScreen
@@ -23,25 +35,25 @@ async def test_action_new_dir_creates_directory(tmp_path):
         input_widget = app.screen.query_one(Input)
         input_widget.value = "new_test_dir"
 
-        # Click OK
-        await pilot.click("#ok")
+        # Click OK (Enter key on input is handled)
+        await pilot.press("enter")
+        await pilot.pause()
 
         # Verify directory creation
         new_dir = tmp_path / "new_test_dir"
         assert new_dir.exists()
         assert new_dir.is_dir()
 
-        # Verify notification (optional, but good to check)
-        # Notifications are harder to check in pilot directly without inspecting private attributes or UI
-        # But we can check if the file system state changed.
-
 @pytest.mark.asyncio
 async def test_action_new_dir_cancel(tmp_path):
     # Setup
     app = FileManagerApp()
-    app.left_path = tmp_path
 
     async with app.run_test() as pilot:
+        # Navigate to User Mode
+        await pilot.click("#user_mode")
+        await pilot.pause()
+
         # Trigger action_new_dir
         await pilot.press("n")
 
@@ -50,10 +62,11 @@ async def test_action_new_dir_cancel(tmp_path):
 
         # Click Cancel
         await pilot.click("#cancel")
+        await pilot.pause()
 
-        # Verify directory creation
+        # Verify directory NOT created
         new_dir = tmp_path / "new_test_dir_cancel"
         assert not new_dir.exists()
 
-        # Check we are back to main screen
-        assert not isinstance(app.screen, InputScreen)
+        # Check we are back to UserModeScreen
+        assert isinstance(app.screen, UserModeScreen)

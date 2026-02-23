@@ -6,15 +6,20 @@ This provides batch operations without the TUI.
 
 import argparse
 import sys
+import json
 from pathlib import Path
 
 try:
     from .automation import FileOrganizer
     from .search import FileSearcher
+    from .tags import TagManager
+    from .scheduler import TaskScheduler
 except ImportError:
     # Support running directly
     from automation import FileOrganizer
     from search import FileSearcher
+    from tags import TagManager
+    from scheduler import TaskScheduler
 
 
 def setup_parser():
@@ -38,6 +43,17 @@ Examples:
   
   # Cleanup old files
   tfm-auto cleanup --dir ~/Downloads --days 30 --dry-run
+
+  # Manage tags
+  tfm-auto tags --list
+  tfm-auto tags --search work
+  tfm-auto tags --add path/to/file --tag work
+
+  # Manage schedule
+  tfm-auto schedule --add "Daily Cleanup" --cron "0 0 * * *" --target ~/Downloads --type cleanup --params '{"days": 30}'
+  tfm-auto schedule --list
+  tfm-auto schedule --run-now
+  tfm-auto schedule --daemon
         """
     )
     
@@ -56,6 +72,7 @@ Examples:
     search_parser.add_argument('--dir', required=True, help='Directory to search')
     search_parser.add_argument('--name', help='File name pattern')
     search_parser.add_argument('--content', help='Search file contents')
+    search_parser.add_argument('--tag', help='Search by tag')
     search_parser.add_argument('--case-sensitive', action='store_true', help='Case sensitive search')
     
     # Duplicates command
@@ -77,6 +94,27 @@ Examples:
     rename_parser.add_argument('--replacement', required=True, help='Replacement text')
     rename_parser.add_argument('--recursive', action='store_true', help='Process subdirectories')
     
+    # Tags command
+    tags_parser = subparsers.add_parser('tags', help='Manage file tags')
+    tags_parser.add_argument('--list', action='store_true', help='List all tags')
+    tags_parser.add_argument('--search', help='Search files by tag')
+    tags_parser.add_argument('--export', action='store_true', help='Export all tags and files')
+    tags_parser.add_argument('--add', help='Add a tag to a file (requires --tag)')
+    tags_parser.add_argument('--remove', help='Remove a tag from a file (requires --tag)')
+    tags_parser.add_argument('--tag', help='Tag name to add/remove')
+
+    # Schedule command
+    sched_parser = subparsers.add_parser('schedule', help='Manage scheduled tasks')
+    sched_parser.add_argument('--add', help='Task name')
+    sched_parser.add_argument('--cron', help='Cron expression')
+    sched_parser.add_argument('--target', help='Target directory')
+    sched_parser.add_argument('--type', help='Task type (cleanup, organize_by_type, organize_by_date, find_duplicates)')
+    sched_parser.add_argument('--params', help='JSON string of parameters')
+    sched_parser.add_argument('--list', action='store_true', help='List all scheduled tasks')
+    sched_parser.add_argument('--remove', help='Remove task by name')
+    sched_parser.add_argument('--run-now', action='store_true', help='Run pending tasks immediately')
+    sched_parser.add_argument('--daemon', action='store_true', help='Run scheduler as a daemon')
+
     return parser
 
 
@@ -110,6 +148,14 @@ def handle_organize(args):
 def handle_search(args):
     """Handle the search command."""
     searcher = FileSearcher()
+
+    if args.tag:
+        results = searcher.search_by_tag(args.tag)
+        print(f"Found {len(results)} files tagged with '{args.tag}':")
+        for path in results:
+            print(f"  {path}")
+        return 0
+
     directory = Path(args.dir)
 
     if not directory.exists():
@@ -135,7 +181,7 @@ def handle_search(args):
         for path in results:
             print(f"  {path}")
     else:
-        print("Error: Specify either --name or --content")
+        print("Error: Specify --name, --content, or --tag")
         return 1
 
     return 0
@@ -214,6 +260,106 @@ def handle_rename(args):
 
     return 0
 
+def handle_tags(args):
+    """Handle the tags command."""
+    tm = TagManager()
+
+    if args.list:
+        tags = tm.list_all_tags()
+        print("Available Tags:")
+        for tag in tags:
+            print(f"  {tag}")
+
+    elif args.search:
+        files = tm.get_files_by_tag(args.search)
+        print(f"Files tagged '{args.search}':")
+        for path in files:
+            print(f"  {path}")
+
+    elif args.export:
+        tags = tm.list_all_tags()
+        export_data = {}
+        for tag in tags:
+            files = [str(p) for p in tm.get_files_by_tag(tag)]
+            export_data[tag] = files
+        print(json.dumps(export_data, indent=2))
+
+    elif args.add:
+        if not args.tag:
+            print("Error: --tag is required with --add")
+            return 1
+        path = Path(args.add)
+        if not path.exists():
+            print(f"Error: File not found: {path}")
+            return 1
+        if tm.add_tag(path, args.tag):
+            print(f"Added tag '{args.tag}' to {path}")
+        else:
+            print(f"Failed to add tag.")
+
+    elif args.remove:
+        if not args.tag:
+            print("Error: --tag is required with --remove")
+            return 1
+        path = Path(args.remove)
+        if tm.remove_tag(path, args.tag):
+            print(f"Removed tag '{args.tag}' from {path}")
+        else:
+            print(f"Failed to remove tag (or tag/file not found).")
+
+    else:
+        print("Error: Specify an action (--list, --search, --export, --add, --remove)")
+        return 1
+
+    return 0
+
+def handle_schedule(args):
+    """Handle the schedule command."""
+    scheduler = TaskScheduler()
+
+    if args.add:
+        if not args.cron or not args.target or not args.type:
+            print("Error: --cron, --target, and --type are required with --add")
+            return 1
+
+        params = {}
+        if args.params:
+            try:
+                params = json.loads(args.params)
+            except json.JSONDecodeError:
+                print("Error: Invalid JSON for --params")
+                return 1
+
+        if scheduler.add_task(args.add, args.cron, args.target, args.type, params):
+            print(f"Task '{args.add}' added.")
+        else:
+            print(f"Failed to add task.")
+
+    elif args.remove:
+        if scheduler.remove_task(args.remove):
+            print(f"Task '{args.remove}' removed.")
+        else:
+            print(f"Failed to remove task (or not found).")
+
+    elif args.list:
+        tasks = scheduler.list_tasks()
+        print("Scheduled Tasks:")
+        for task in tasks:
+            print(f"  {task['name']}: {task['cron']} ({task['task_type']}) - Last run: {task.get('last_run', 'Never')}")
+
+    elif args.run_now:
+        print("Running pending tasks...")
+        scheduler.run_pending_tasks()
+        print("Done.")
+
+    elif args.daemon:
+        scheduler.run_daemon()
+
+    else:
+        print("Error: Specify an action (--add, --remove, --list, --run-now, --daemon)")
+        return 1
+
+    return 0
 
 def main():
     """Main CLI entry point."""
@@ -229,7 +375,9 @@ def main():
         'search': handle_search,
         'duplicates': handle_duplicates,
         'cleanup': handle_cleanup,
-        'rename': handle_rename
+        'rename': handle_rename,
+        'tags': handle_tags,
+        'schedule': handle_schedule
     }
 
     try:
