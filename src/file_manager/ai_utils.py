@@ -1,6 +1,8 @@
 import subprocess
 import shlex
 import re
+import time
+import selectors
 from typing import Optional, Tuple
 from .utils import find_gemini_executable
 
@@ -14,6 +16,82 @@ class AIExecutor:
         """Check if Gemini CLI is installed."""
         return self.gemini_path is not None
 
+    def _run_with_limit(self, cmd: list, timeout: int = 30, max_size: int = 10 * 1024 * 1024) -> Tuple[int, str, str]:
+        """
+        Run a command with a timeout and output size limit.
+        Returns (returncode, stdout, stderr).
+        """
+        start_time = time.time()
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1  # Line buffered
+        )
+
+        stdout_chunks = []
+        stderr_chunks = []
+        current_size = 0
+
+        # We use selectors to read from both pipes without blocking
+        sel = selectors.DefaultSelector()
+        sel.register(process.stdout, selectors.EVENT_READ)
+        sel.register(process.stderr, selectors.EVENT_READ)
+
+        try:
+            while True:
+                # Check for timeout
+                if time.time() - start_time > timeout:
+                    process.kill()
+                    raise subprocess.TimeoutExpired(cmd, timeout)
+
+                # Wait for I/O with a small timeout to allow checking the overall timeout
+                events = sel.select(timeout=0.1)
+
+                if not events and process.poll() is not None:
+                    # Process finished and no more data to read
+                    break
+
+                for key, _ in events:
+                    fileobj = key.fileobj
+                    # Read a chunk. 4096 is a reasonable size.
+                    chunk = fileobj.read(4096)
+
+                    if not chunk:
+                        # End of file
+                        sel.unregister(fileobj)
+                        continue
+
+                    if fileobj == process.stdout:
+                        stdout_chunks.append(chunk)
+                    else:
+                        stderr_chunks.append(chunk)
+
+                    current_size += len(chunk)
+                    if current_size > max_size:
+                        process.kill()
+                        raise ValueError("Output exceeded limit")
+
+                # If both pipes are closed, we are done
+                if not sel.get_map():
+                    break
+
+        finally:
+            sel.close()
+            # Ensure process is cleaned up
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+
+            # Close pipes explicitly to avoid ResourceWarning
+            if process.stdout:
+                process.stdout.close()
+            if process.stderr:
+                process.stderr.close()
+
+        return process.returncode, "".join(stdout_chunks), "".join(stderr_chunks)
+
     def execute_prompt(self, prompt: str) -> str:
         """
         Send a prompt to Gemini and return the response.
@@ -25,22 +103,21 @@ class AIExecutor:
             # Command format: gemini -p "prompt"
             cmd = [self.gemini_path, "-p", prompt]
 
-            # Run the command
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=30  # Timeout after 30 seconds
-            )
+            # Run the command with limit
+            returncode, stdout, stderr = self._run_with_limit(cmd, timeout=30)
 
-            if result.returncode != 0:
+            if returncode != 0:
                 # Some CLIs print errors to stdout, check both
-                return f"Error ({result.returncode}): {result.stderr} {result.stdout}"
+                return f"Error ({returncode}): {stderr} {stdout}"
 
-            return result.stdout.strip()
+            return stdout.strip()
 
         except subprocess.TimeoutExpired:
             return "Error: Request timed out."
+        except ValueError as e:
+            if str(e) == "Output exceeded limit":
+                return "Error: Output exceeded limit."
+            return f"Error executing AI command: {str(e)}"
         except Exception as e:
             return f"Error executing AI command: {str(e)}"
 
