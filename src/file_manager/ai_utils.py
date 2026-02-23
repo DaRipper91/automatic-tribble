@@ -1,5 +1,4 @@
 import subprocess
-import shlex
 import re
 import time
 import selectors
@@ -36,8 +35,12 @@ class AIExecutor:
 
         # We use selectors to read from both pipes without blocking
         sel = selectors.DefaultSelector()
-        sel.register(process.stdout, selectors.EVENT_READ)
-        sel.register(process.stderr, selectors.EVENT_READ)
+
+        # Explicitly check and register if pipes are available
+        if process.stdout:
+            sel.register(process.stdout, selectors.EVENT_READ)
+        if process.stderr:
+            sel.register(process.stderr, selectors.EVENT_READ)
 
         try:
             while True:
@@ -54,9 +57,17 @@ class AIExecutor:
                     break
 
                 for key, _ in events:
+                    # key.fileobj is typed as int | HasFileno
+                    # We know it is a file object (TextIO) because that's what we registered
                     fileobj = key.fileobj
+
+                    # For mypy, we can assert or cast, or just use duck typing if mypy allows
+                    # But here we need to call read() which is not on HasFileno
+                    if not hasattr(fileobj, "read"):
+                        continue
+
                     # Read a chunk. 4096 is a reasonable size.
-                    chunk = fileobj.read(4096)
+                    chunk = fileobj.read(4096) # type: ignore
 
                     if not chunk:
                         # End of file

@@ -4,8 +4,8 @@ AI Mode Screen - Automation Interface
 
 from pathlib import Path
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Button, Label, Input, Static, RichLog
+from textual.containers import Container, Horizontal, Vertical
+from textual.widgets import Header, Footer, Button, Label, Input, RichLog
 from textual.screen import Screen
 from textual.binding import Binding
 from textual import work
