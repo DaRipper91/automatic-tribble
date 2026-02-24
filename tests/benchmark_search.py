@@ -1,8 +1,6 @@
 
 import time
-import os
 import shutil
-import sys
 import resource
 from pathlib import Path
 from src.file_manager.search import FileSearcher

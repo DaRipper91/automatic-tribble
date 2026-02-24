@@ -3,7 +3,7 @@ import pytest
 import time
 import asyncio
 from textual.app import App, ComposeResult
-from textual.widgets import Input, Button, RichLog
+from textual.widgets import Input
 from src.file_manager.ai_mode import AIModeScreen
 from src.file_manager.ai_integration import GeminiClient
 from src.file_manager.screens import ConfirmationScreen

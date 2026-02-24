@@ -119,3 +119,56 @@ class TestAutomationAsync:
         assert item == file1 or item.name == "test.txt"
 
         await task
+
+    async def test_resolve_duplicates_keep_oldest(self):
+        file1 = self.test_dir / "old.txt"
+        file1.write_text("content")
+        os.utime(file1, (0, 0)) # Very old
+
+        file2 = self.test_dir / "new.txt"
+        file2.write_text("content")
+        # Default time is now
+
+        duplicates = await self.organizer.find_duplicates(self.test_dir)
+        deleted = await self.organizer.resolve_duplicates(duplicates, ConflictResolutionStrategy.KEEP_OLDEST)
+
+        assert len(deleted) == 1
+        assert deleted[0] == file2
+        assert not file2.exists()
+        assert file1.exists()
+
+    async def test_resolve_duplicates_keep_largest(self):
+        # Files must be identical to be duplicates, so size is same.
+        # This strategy is effectively arbitrary for identical files.
+        file1 = self.test_dir / "file1.txt"
+        file1.write_text("content")
+        file2 = self.test_dir / "file2.txt"
+        file2.write_text("content")
+
+        duplicates = await self.organizer.find_duplicates(self.test_dir)
+        deleted = await self.organizer.resolve_duplicates(duplicates, ConflictResolutionStrategy.KEEP_LARGEST)
+
+        assert len(deleted) == 1
+        # One remains
+        assert len(list(self.test_dir.glob("*.txt"))) == 1
+
+    async def test_batch_rename_empty_pattern(self):
+        with pytest.raises(ValueError):
+            await self.organizer.batch_rename(self.test_dir, "", "replacement")
+
+    async def test_batch_rename_conflict(self):
+        file1 = self.test_dir / "test_1.txt"
+        file1.touch()
+
+        # Trying to rename to existing file
+        # We need another file "replaced_1.txt" to exist
+        (self.test_dir / "replaced_1.txt").touch()
+
+        # Rename "test" -> "replaced"
+        # "test_1.txt" -> "replaced_1.txt" (exists)
+
+        renamed = await self.organizer.batch_rename(self.test_dir, "test", "replaced")
+
+        # Should be skipped because target exists
+        assert len(renamed) == 0
+        assert file1.exists()

@@ -1,7 +1,6 @@
 import pytest
 import os
 import time
-import shutil
 import tempfile
 from pathlib import Path
 from src.file_manager.automation import FileOrganizer

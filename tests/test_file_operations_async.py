@@ -1,9 +1,8 @@
 import pytest
-import asyncio
-import shutil
 import tempfile
 from pathlib import Path
-from src.file_manager.file_operations import FileOperations, OperationType, FileOperation
+from src.file_manager.file_operations import FileOperations, OperationType
+from src.file_manager.exceptions import TFMPathNotFoundError, TFMOperationConflictError
 
 @pytest.mark.asyncio
 class TestFileOperationsAsync:
@@ -44,6 +43,75 @@ class TestFileOperationsAsync:
         await self.file_ops.move(source, dest)
 
         assert dest.exists()
+        assert not source.exists()
+
+    async def test_copy_source_not_found(self):
+        source = self.test_dir / "nonexistent.txt"
+        dest = self.test_dir / "dest.txt"
+
+        with pytest.raises(TFMPathNotFoundError):
+            await self.file_ops.copy(source, dest)
+
+    async def test_copy_dest_exists(self):
+        source = self.test_dir / "source.txt"
+        source.write_text("content")
+        dest = self.test_dir / "dest.txt"
+        dest.write_text("exists")
+
+        with pytest.raises(TFMOperationConflictError):
+            await self.file_ops.copy(source, dest)
+
+    async def test_move_source_not_found(self):
+        source = self.test_dir / "nonexistent.txt"
+        dest = self.test_dir / "dest.txt"
+
+        with pytest.raises(TFMPathNotFoundError):
+            await self.file_ops.move(source, dest)
+
+    async def test_delete_not_found(self):
+        source = self.test_dir / "nonexistent.txt"
+
+        with pytest.raises(TFMPathNotFoundError):
+            await self.file_ops.delete(source)
+
+    async def test_rename_not_found(self):
+        source = self.test_dir / "nonexistent.txt"
+
+        with pytest.raises(TFMPathNotFoundError):
+            await self.file_ops.rename(source, "newname.txt")
+
+    async def test_rename_conflict(self):
+        source = self.test_dir / "source.txt"
+        source.write_text("content")
+        existing = self.test_dir / "existing.txt"
+        existing.touch()
+
+        with pytest.raises(TFMOperationConflictError):
+            await self.file_ops.rename(source, "existing.txt")
+
+    async def test_create_dir_exists(self):
+        existing = self.test_dir / "existing_dir"
+        existing.mkdir()
+
+        with pytest.raises(TFMOperationConflictError):
+            await self.file_ops.create_directory(existing)
+
+        # Should not raise if exist_ok=True
+        await self.file_ops.create_directory(existing, exist_ok=True)
+
+    async def test_undo_delete_missing_trash(self):
+        source = self.test_dir / "file.txt"
+        source.touch()
+
+        await self.file_ops.delete(source)
+
+        # Manually delete from trash
+        op = self.file_ops.history._undo_stack[-1]
+        if op.trash_path and op.trash_path.exists():
+             op.trash_path.unlink()
+
+        result = await self.file_ops.undo_last()
+        assert "Cannot undo delete" in result
         assert not source.exists()
 
         # Verify history

@@ -2,6 +2,7 @@
 User Mode Screen - Standard File Manager Interface
 """
 
+from typing import Optional
 from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -141,7 +142,7 @@ class UserModeScreen(Screen):
             target_path = target_dir / selected_path.name
 
             if target_path.exists():
-                def confirm_overwrite(confirmed: bool) -> None:
+                def confirm_overwrite(confirmed: Optional[bool]) -> None:
                     if confirmed:
                         self._background_overwrite(selected_path, target_dir, target_path, target_panel)
 
@@ -182,7 +183,7 @@ class UserModeScreen(Screen):
             target_path = target_dir / selected_path.name
 
             if target_path.exists():
-                def confirm_overwrite(confirmed: bool) -> None:
+                def confirm_overwrite(confirmed: Optional[bool]) -> None:
                     if confirmed:
                         self._background_move_overwrite(selected_path, target_dir, target_path, active_panel_widget, target_panel)
 
@@ -220,7 +221,7 @@ class UserModeScreen(Screen):
         selected_path = active_panel_widget.get_selected_path()
 
         if selected_path:
-            def check_confirm(confirmed: bool) -> None:
+            def check_confirm(confirmed: Optional[bool]) -> None:
                 if confirmed:
                     self._perform_delete(selected_path, active_panel_widget)
 
@@ -247,7 +248,7 @@ class UserModeScreen(Screen):
         active_panel_widget = self.get_active_panel()
         current_dir = active_panel_widget.current_dir
 
-        def do_create_dir(dir_name: str) -> None:
+        def do_create_dir(dir_name: Optional[str]) -> None:
             if not dir_name:
                 return
 
@@ -277,7 +278,7 @@ class UserModeScreen(Screen):
         selected_path = active_panel_widget.get_selected_path()
 
         if selected_path:
-            def do_rename(new_name: str) -> None:
+            def do_rename(new_name: Optional[str]) -> None:
                 if not new_name or new_name == selected_path.name:
                     return
 
