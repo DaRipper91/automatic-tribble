@@ -79,6 +79,7 @@ def setup_parser():
     # Config command
     config = subparsers.add_parser('config', help='Manage configuration')
     config.add_argument('--edit', action='store_true', help='Edit configuration file')
+    config.add_argument('--theme', choices=['dark', 'light', 'solarized', 'dracula'], help='Set application theme')
     
     return parser
 
@@ -295,13 +296,21 @@ async def handle_config(args):
     config_manager = ConfigManager()
     config_path = config_manager.get_config_path()
 
-    if args.edit:
+    if args.theme:
+        config = config_manager.load_config()
+        config['theme'] = args.theme
+        config_manager.save_config(config)
+        console.print(f"Theme set to: {args.theme}")
+    elif args.edit:
         editor = os.environ.get('EDITOR', 'nano')
         subprocess.call([editor, str(config_path)])
     else:
         console.print(f"Configuration file: {config_path}")
         categories = config_manager.load_categories()
         console.print(categories)
+
+        config = config_manager.load_config()
+        console.print(f"Current Config: {config}")
 
 async def main_async():
     parser = setup_parser()

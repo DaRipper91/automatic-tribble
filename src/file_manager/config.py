@@ -32,6 +32,8 @@ class ConfigManager:
             config_dir = Path.home() / ".tfm"
         self.config_dir = config_dir
         self.categories_file = self.config_dir / "categories.yaml"
+        self.config_file = self.config_dir / "config.yaml"
+        self.recent_file = self.config_dir / "recent.json"
         self._ensure_config_dir()
 
     def _ensure_config_dir(self) -> None:
@@ -77,3 +79,60 @@ class ConfigManager:
 
     def get_config_path(self) -> Path:
         return self.categories_file
+
+    def load_config(self) -> Dict:
+        """Load main configuration."""
+        if not self.config_file.exists():
+            return {"theme": "dark"}
+
+        try:
+            with open(self.config_file, 'r') as f:
+                config = yaml.safe_load(f)
+            return config if isinstance(config, dict) else {"theme": "dark"}
+        except Exception as e:
+            logger.error(f"Error loading config: {e}")
+            return {"theme": "dark"}
+
+    def save_config(self, config: Dict) -> None:
+        """Save main configuration."""
+        try:
+            self._ensure_config_dir()
+            with open(self.config_file, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False)
+        except Exception as e:
+            logger.error(f"Error saving config: {e}")
+
+    def load_recent_dirs(self) -> List[Path]:
+        """Load recent directories."""
+        if not self.recent_file.exists():
+            return []
+
+        try:
+            import json
+            with open(self.recent_file, 'r') as f:
+                data = json.load(f)
+                return [Path(p) for p in data if Path(p).exists()]
+        except Exception as e:
+            logger.error(f"Error loading recent dirs: {e}")
+            return []
+
+    def save_recent_dirs(self, paths: List[Path]) -> None:
+        """Save recent directories."""
+        try:
+            self._ensure_config_dir()
+            import json
+            # Keep only valid paths and limit to 5
+            valid_paths = [str(p) for p in paths if p.exists()][:5]
+            with open(self.recent_file, 'w') as f:
+                json.dump(valid_paths, f)
+        except Exception as e:
+            logger.error(f"Error saving recent dirs: {e}")
+
+    def add_recent_dir(self, path: Path) -> None:
+        """Add a path to recent directories."""
+        recents = self.load_recent_dirs()
+        # Remove if exists to move to top
+        if path in recents:
+            recents.remove(path)
+        recents.insert(0, path)
+        self.save_recent_dirs(recents)

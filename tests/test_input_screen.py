@@ -53,7 +53,11 @@ async def test_input_screen_composition():
 
         # Test OK button
         input_widget.value = "New Value"
-        await pilot.click("#ok")
+        # Use keys to avoid coordinate issues with animation
+        await pilot.press("tab") # Focus Cancel
+        await pilot.press("tab") # Focus OK
+        await pilot.press("enter")
+
         # Assert screen is dismissed (by checking app.screen is not this screen)
         assert app.screen is not screen
 
@@ -70,17 +74,23 @@ async def test_input_screen_cancel():
         screen = InputScreen("Title", "Message")
         await app.push_screen(screen, handle_result)
 
-        await pilot.click("#cancel")
+        # Cancel button is first after input? No, Input -> Cancel -> OK
+        await pilot.press("tab") # Focus Cancel
+        await pilot.press("enter")
         assert result == "" # Cancel returns empty string in new InputScreen logic
+
         screen = InputScreen("Test Title", "Test Message")
         await app.push_screen(screen, handle_result)
 
-        await pilot.click("#cancel")
+        await pilot.press("tab")
+        await pilot.press("enter")
         assert result == ""  # Cancel returns empty string in the new InputScreen
+
         screen = InputScreen("Test Title", "Test Prompt")
         await app.push_screen(screen, handle_result)
 
-        await pilot.click("#cancel")
+        await pilot.press("tab")
+        await pilot.press("enter")
         # In the new InputScreen, cancel returns empty string "", not None
         assert result == ""
         assert app.screen is not screen

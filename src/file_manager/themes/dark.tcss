@@ -1,0 +1,14 @@
+/* Dark Theme (Default) */
+$surface: #1e1e1e;
+$background: #121212;
+$panel: #252526;
+$boost: #2d2d30;
+$primary: #007acc;
+$secondary: #3e3e42;
+$accent: #569cd6;
+$error: #f48771;
+$warning: #cca700;
+$success: #89d185;
+$text: #cccccc;
+$text-muted: #858585;
+$text-disabled: #555555;

@@ -409,6 +409,8 @@ class ConfirmationScreen(ModalScreen[bool]):
         height: 11;
         border: thick $background 80%;
         background: $surface;
+        offset-y: 100%;
+        transition: offset-y 0.3s;
     }
 
     #question {
@@ -448,6 +450,9 @@ class ConfirmationScreen(ModalScreen[bool]):
             with Horizontal(id="buttons"):
                 yield Button("Cancel", variant="primary", id="cancel")
                 yield Button(self.confirm_label, variant=self.confirm_variant, id="confirm")
+
+    def on_mount(self) -> None:
+        self.query_one("#dialog").styles.offset_y = "0"
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":
@@ -558,6 +563,8 @@ class InputScreen(ModalScreen[str]):
         height: 13;
         border: thick $background 80%;
         background: $surface;
+        offset-y: 100%;
+        transition: offset-y 0.3s;
     }
 
     .title {
@@ -602,6 +609,9 @@ class InputScreen(ModalScreen[str]):
         self.title_text = title
         self.message = message
         self.initial_value = initial_value
+
+    def on_mount(self) -> None:
+        self.query_one("#input-dialog").styles.offset_y = "0"
 
     def compose(self) -> ComposeResult:
         with Container(id="input-dialog"):
