@@ -5,7 +5,7 @@ Automation features for file organization and management.
 import asyncio
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Callable, Optional, Union, Iterator
+from typing import Dict, List, Callable, Optional, Union, Iterator, Set
 from datetime import datetime
 from enum import Enum, auto
 import os
@@ -48,6 +48,7 @@ class FileOrganizer:
         target_dir: Path,
         categories: Optional[Dict[str, List[str]]] = None,
         move: bool = False,
+        dry_run: bool = False,
         progress_queue: Optional[asyncio.Queue] = None
     ) -> Dict[str, List[Path]]:
         """
@@ -64,6 +65,7 @@ class FileOrganizer:
             target_dir,
             lambda p: self._get_file_category(p, extension_map),
             move,
+            dry_run,
             progress_queue
         )
     
@@ -73,6 +75,7 @@ class FileOrganizer:
         target_dir: Path,
         date_format: str = "%Y/%m",
         move: bool = False,
+        dry_run: bool = False,
         progress_queue: Optional[asyncio.Queue] = None
     ) -> Dict[str, List[Path]]:
         """
@@ -88,6 +91,7 @@ class FileOrganizer:
             target_dir,
             get_date_key,
             move,
+            dry_run,
             progress_queue
         )
 
@@ -97,15 +101,19 @@ class FileOrganizer:
         target_dir: Path,
         key_func: Callable[[Path], Optional[str]],
         move: bool,
+        dry_run: bool = False,
         progress_queue: Optional[asyncio.Queue] = None
     ) -> Dict[str, List[Path]]:
         """
         Generic method to organize files based on a key generation function.
         """
         organized: Dict[str, List[Path]] = {}
-        await self.file_ops.create_directory(target_dir, exist_ok=True)
+
+        if not dry_run:
+            await self.file_ops.create_directory(target_dir, exist_ok=True)
 
         files = list(source_dir.iterdir())
+        used_paths: Set[Path] = set()
         
         for file_path in files:
             if not file_path.is_file():
@@ -123,19 +131,23 @@ class FileOrganizer:
             except (ValueError, RuntimeError):
                 continue
 
-            if not key_dir.exists():
+            if not dry_run and not key_dir.exists():
                 await self.file_ops.create_directory(key_dir, exist_ok=True)
             
             target_path = key_dir / file_path.name
-            target_path = self._get_unique_path(target_path)
+            target_path = self._get_unique_path(target_path, used_paths if dry_run else None)
+
+            if dry_run:
+                used_paths.add(target_path)
             
             try:
-                if move:
-                    await self.file_ops.move(file_path, target_path)
-                else:
-                    await self.file_ops.copy(file_path, target_path)
+                if not dry_run:
+                    if move:
+                        await self.file_ops.move(file_path, target_path)
+                    else:
+                        await self.file_ops.copy(file_path, target_path)
 
-                self.file_ops.plugins.on_organize(file_path, target_path)
+                    self.file_ops.plugins.on_organize(file_path, target_path)
 
                 if key not in organized:
                     organized[key] = []
@@ -341,6 +353,7 @@ class FileOrganizer:
         pattern: str,
         replacement: str,
         recursive: bool = False,
+        dry_run: bool = False,
         progress_queue: Optional[asyncio.Queue] = None
     ) -> List[Path]:
         """
@@ -350,7 +363,8 @@ class FileOrganizer:
             raise ValueError("Pattern cannot be empty")
 
         renamed_files = []
-        
+        used_paths: Set[Path] = set()
+
         def collect_files():
             return list(self._iter_files(directory, recursive))
 
@@ -363,9 +377,27 @@ class FileOrganizer:
                 if any(sep in new_name for sep in [os.sep, os.altsep] if sep) or new_name in ('.', '..'):
                     continue
 
+                new_path = file_path.parent / new_name
+
+                # Check existence (considering dry run simulation)
+                exists = new_path.exists()
+                if dry_run:
+                     if new_path in used_paths:
+                         exists = True
+                     used_paths.add(new_path)
+
+                if exists and not dry_run:
+                     # Rename usually fails if target exists (depending on OS/impl), or overwrites?
+                     # FileOperations.rename uses shutil.move or os.rename.
+                     # Standard behavior: avoid overwrite unless intended.
+                     # Here we skip.
+                     logger.warning(f"Skipping rename {file_path} -> {new_name}: Target exists")
+                     continue
+
                 try:
-                    await self.file_ops.rename(file_path, new_name)
-                    new_path = file_path.parent / new_name
+                    if not dry_run:
+                        await self.file_ops.rename(file_path, new_name)
+
                     renamed_files.append(new_path)
 
                     if progress_queue:
@@ -377,11 +409,16 @@ class FileOrganizer:
         return renamed_files
     
     @staticmethod
-    def _get_unique_path(target_path: Path) -> Path:
+    def _get_unique_path(target_path: Path, simulated_paths: Optional[Set[Path]] = None) -> Path:
         """
         Generate a unique path by appending a counter if target exists.
         """
-        if not target_path.exists():
+        def exists(path):
+            if simulated_paths is not None and path in simulated_paths:
+                return True
+            return path.exists()
+
+        if not exists(target_path):
             return target_path
 
         stem = target_path.stem
@@ -392,7 +429,7 @@ class FileOrganizer:
         while True:
             new_name = f"{stem}_{counter}{suffix}"
             new_path = parent / new_name
-            if not new_path.exists():
+            if not exists(new_path):
                 return new_path
             counter += 1
 

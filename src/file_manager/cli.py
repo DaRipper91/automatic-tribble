@@ -79,6 +79,28 @@ def setup_parser():
     # Config command
     config = subparsers.add_parser('config', help='Manage configuration')
     config.add_argument('--edit', action='store_true', help='Edit configuration file')
+
+    # Tag command
+    tag_parser = subparsers.add_parser('tags', help='Manage file tags')
+    tag_parser.add_argument('--list', action='store_true', help='List all tags')
+    tag_parser.add_argument('--search', help='Search for files with tag')
+    tag_parser.add_argument('--add', nargs=2, metavar=('FILE', 'TAG'), help='Add tag to file')
+    tag_parser.add_argument('--remove', nargs=2, metavar=('FILE', 'TAG'), help='Remove tag from file')
+    tag_parser.add_argument('--get', metavar='FILE', help='Get tags for file')
+    tag_parser.add_argument('--export', action='store_true', help='Export tags (not implemented)')
+
+    # Schedule command
+    schedule_parser = subparsers.add_parser('schedule', help='Manage scheduled tasks')
+    schedule_parser.add_argument('--add', help='Task name')
+    schedule_parser.add_argument('--cron', help='Cron expression')
+    schedule_parser.add_argument('--type', choices=['organize_by_type', 'organize_by_date', 'cleanup'], help='Task type')
+    schedule_parser.add_argument('--source', help='Source directory')
+    schedule_parser.add_argument('--target', help='Target directory (for organize)')
+    schedule_parser.add_argument('--days', type=int, help='Days (for cleanup)')
+    schedule_parser.add_argument('--list', action='store_true', help='List tasks')
+    schedule_parser.add_argument('--remove', help='Remove task by name')
+    schedule_parser.add_argument('--run-now', action='store_true', help='Run due tasks immediately')
+    schedule_parser.add_argument('--daemon', action='store_true', help='Run scheduler as daemon')
     
     return parser
 
@@ -303,6 +325,129 @@ async def handle_config(args):
         categories = config_manager.load_categories()
         console.print(categories)
 
+async def handle_tags(args):
+    from .tags import TagManager
+    manager = TagManager()
+
+    if args.list:
+        tags = manager.list_all_tags()
+        if args.json:
+            print(json.dumps(tags))
+        else:
+            console.print("Available Tags:")
+            for t in tags:
+                console.print(f"  {t}")
+
+    elif args.search:
+        files = manager.search_by_tag(args.search)
+        if args.json:
+            print(json.dumps([str(p) for p in files]))
+        else:
+            console.print(f"Files tagged with '{args.search}':")
+            for p in files:
+                console.print(f"  {p}")
+
+    elif args.add:
+        file_path = Path(args.add[0])
+        tag = args.add[1]
+        success = manager.add_tag(file_path, tag)
+        if args.json:
+            print(json.dumps({"success": success}))
+        else:
+            if success:
+                console.print(f"Added tag '{tag}' to {file_path}")
+            else:
+                console.print(f"[red]Failed to add tag to {file_path}[/]")
+
+    elif args.remove:
+        file_path = Path(args.remove[0])
+        tag = args.remove[1]
+        success = manager.remove_tag(file_path, tag)
+        if args.json:
+            print(json.dumps({"success": success}))
+        else:
+            if success:
+                console.print(f"Removed tag '{tag}' from {file_path}")
+            else:
+                console.print(f"[red]Failed to remove tag from {file_path}[/]")
+
+    elif args.get:
+        file_path = Path(args.get)
+        tags = manager.get_tags(file_path)
+        if args.json:
+            print(json.dumps(tags))
+        else:
+            console.print(f"Tags for {file_path}:")
+            for t in tags:
+                console.print(f"  {t}")
+
+    else:
+        pass
+
+    return 0
+
+async def handle_schedule(args):
+    from .scheduler import TaskScheduler
+    scheduler = TaskScheduler()
+
+    if args.daemon:
+        await scheduler.run_daemon()
+        return 0
+
+    if args.add:
+        if not args.cron or not args.type:
+            console.print("[red]--cron and --type are required for adding a task.[/]")
+            return 1
+
+        params = {}
+        if args.type.startswith("organize"):
+            if not args.source or not args.target:
+                console.print("[red]--source and --target are required for organize tasks.[/]")
+                return 1
+            params = {"source": args.source, "target": args.target}
+        elif args.type == "cleanup":
+             if not args.source or not args.days:
+                console.print("[red]--source (as --dir) and --days are required for cleanup tasks.[/]")
+                return 1
+             params = {"dir": args.source, "days": args.days, "recursive": True}
+
+        success = scheduler.add_task(args.add, args.cron, args.type, params)
+        if success:
+            console.print(f"Task '{args.add}' scheduled.")
+        else:
+             console.print(f"[red]Failed to schedule task '{args.add}'. Check name or cron expression.[/]")
+
+    elif args.remove:
+        success = scheduler.remove_task(args.remove)
+        if success:
+            console.print(f"Task '{args.remove}' removed.")
+        else:
+             console.print(f"[red]Task '{args.remove}' not found.[/]")
+
+    elif args.list:
+        tasks = scheduler.list_tasks()
+        if args.json:
+            print(json.dumps(tasks, indent=2))
+        else:
+            table = Table(title="Scheduled Tasks")
+            table.add_column("Name")
+            table.add_column("Cron")
+            table.add_column("Type")
+            table.add_column("Last Run")
+            for t in tasks:
+                table.add_row(t["name"], t["cron"], t["type"], str(t.get("last_run", "Never")))
+            console.print(table)
+
+    elif args.run_now:
+        await scheduler.run_due_tasks()
+        console.print("Checked and executed due tasks.")
+
+    else:
+        # Check if run as daemon via direct invocation, or just show help
+        pass
+
+    return 0
+
 async def main_async():
     parser = setup_parser()
     args = parser.parse_args()
@@ -324,7 +469,9 @@ async def main_async():
         'duplicates': handle_duplicates,
         'cleanup': handle_cleanup,
         'rename': handle_rename,
-        'config': handle_config
+        'config': handle_config,
+        'tags': handle_tags,
+        'schedule': handle_schedule
     }
 
     handler = command_handlers.get(args.command)

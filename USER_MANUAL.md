@@ -105,7 +105,19 @@ AI Mode uses natural language processing to understand your intent and execute c
     - *Example:* "Organize all PDFs into a Documents folder."
     - *Example:* "Find and delete duplicate images."
 3.  **Process**: Click **Process** or press `Enter`.
-4.  **Review & Execute**: The AI will propose a plan. Review it and confirm execution.
+4.  **Review Plan**: The AI will generate a structured plan of action.
+5.  **Execute**: Confirm the plan to start execution.
+
+### 🌟 New Features
+
+#### Multi-Step Planning
+TFM now breaks down complex requests into atomic steps.
+- **Dry Run Default**: By default, destructive actions are planned but not executed until you confirm.
+- **Visual Diff**: The plan shows exactly what will happen (e.g., "File A -> Folder B").
+
+#### Command History
+- **Navigation**: Use `Up`/`Down` arrows in the input box to recall previous commands.
+- **Semantic Search**: Click "Search History" to find past commands similar to your current intent.
 
 ### ✨ Quick Actions
 The left panel provides buttons for common tasks:
@@ -132,7 +144,7 @@ tfm-auto organize --source ./Photos --target ./Archive --by-date --move
 ```
 
 ### 2. Search
-Find files by name pattern or content.
+Find files by name pattern, content, or tag.
 ```bash
 # Find all Python files
 tfm-auto search --dir ./Project --name "*.py"
@@ -189,7 +201,33 @@ tfm-auto --undo
 tfm-auto --redo
 ```
 
-### 7. Configuration
+### 7. File Tagging
+Manage file tags and metadata.
+```bash
+# Add a tag
+tfm-auto tags --add file.txt "project-x"
+
+# List all tags
+tfm-auto tags --list
+
+# Search for files with a tag
+tfm-auto tags --search "project-x"
+```
+
+### 8. Scheduled Automation
+Schedule recurring tasks using cron expressions.
+```bash
+# Add a daily cleanup task
+tfm-auto schedule --add "cleanup_temp" --cron "0 0 * * *" --type cleanup --source /tmp --days 7
+
+# List scheduled tasks
+tfm-auto schedule --list
+
+# Run the scheduler daemon
+tfm-auto schedule --daemon
+```
+
+### 9. Configuration
 Manage settings.
 ```bash
 # Open configuration file in default editor

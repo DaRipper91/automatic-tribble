@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import List, Optional, Union, Iterator
 from .utils import recursive_scan
 from .plugins.registry import PluginRegistry
+from .tags import TagManager
 
 FILE_TYPE_CHECK_BYTES = 1024
 
@@ -14,6 +15,7 @@ class FileSearcher:
         self.results: List[Path] = []
         self.plugins = PluginRegistry()
         self.plugins.load_plugins()
+        self.tag_manager = TagManager()
     
     def search_by_name(
         self,
@@ -140,6 +142,12 @@ class FileSearcher:
         self.results = results
         size_range = f"{min_size}-{max_size}"
         self.plugins.on_search_complete(f"size:{size_range}", results)
+        return results
+
+    def search_by_tag(self, tag: str) -> List[Path]:
+        """Search for files with a specific tag."""
+        results = self.tag_manager.search_by_tag(tag)
+        self.results = results
         return results
 
     def _scandir_safe(self, directory: Union[Path, str]) -> Iterator[os.DirEntry[str]]:
