@@ -1,225 +1,319 @@
 #!/usr/bin/env python3
 """
 Command-line interface for automation features.
-This provides batch operations without the TUI.
 """
 
+import asyncio
 import argparse
 import sys
+import json
+import os
+import subprocess
 from pathlib import Path
+from typing import Optional
 
+# Import rich for progress bars
 try:
-    from .automation import FileOrganizer
-    from .search import FileSearcher
+    from rich.console import Console
+    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
+    from rich.table import Table
 except ImportError:
-    # Support running directly
-    from automation import FileOrganizer
-    from search import FileSearcher
+    print("Error: 'rich' library is required. Please install it.", file=sys.stderr)
+    sys.exit(1)
 
+from .automation import FileOrganizer, ConflictResolutionStrategy
+from .search import FileSearcher
+from .file_operations import FileOperations
+from .config import ConfigManager
+
+console = Console()
 
 def setup_parser():
     """Set up the argument parser."""
     parser = argparse.ArgumentParser(
         description="File Manager - Automation CLI",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  # Organize files by type
-  tfm-auto organize --source ~/Downloads --target ~/Organized --by-type
-  
-  # Organize files by date
-  tfm-auto organize --source ~/Downloads --target ~/Organized --by-date
-  
-  # Search for files
-  tfm-auto search --dir ~/Documents --name "*.pdf"
-  
-  # Find duplicate files
-  tfm-auto duplicates --dir ~/Downloads
-  
-  # Cleanup old files
-  tfm-auto cleanup --dir ~/Downloads --days 30 --dry-run
-        """
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     
+    parser.add_argument('--undo', action='store_true', help='Undo last operation')
+    parser.add_argument('--redo', action='store_true', help='Redo last operation')
+    parser.add_argument('--json', action='store_true', help='Output in JSON format')
+
     subparsers = parser.add_subparsers(dest='command', help='Command to execute')
     
     # Organize command
-    organize_parser = subparsers.add_parser('organize', help='Organize files')
-    organize_parser.add_argument('--source', required=True, help='Source directory')
-    organize_parser.add_argument('--target', required=True, help='Target directory')
-    organize_parser.add_argument('--by-type', action='store_true', help='Organize by file type')
-    organize_parser.add_argument('--by-date', action='store_true', help='Organize by date')
-    organize_parser.add_argument('--move', action='store_true', help='Move files instead of copy')
+    organize = subparsers.add_parser('organize', help='Organize files')
+    organize.add_argument('--source', required=True, help='Source directory')
+    organize.add_argument('--target', required=True, help='Target directory')
+    organize.add_argument('--by-type', action='store_true', help='Organize by file type')
+    organize.add_argument('--by-date', action='store_true', help='Organize by date')
+    organize.add_argument('--move', action='store_true', help='Move files instead of copy')
     
     # Search command
-    search_parser = subparsers.add_parser('search', help='Search for files')
-    search_parser.add_argument('--dir', required=True, help='Directory to search')
-    search_parser.add_argument('--name', help='File name pattern')
-    search_parser.add_argument('--content', help='Search file contents')
-    search_parser.add_argument('--case-sensitive', action='store_true', help='Case sensitive search')
+    search = subparsers.add_parser('search', help='Search for files')
+    search.add_argument('--dir', required=True, help='Directory to search')
+    search.add_argument('--name', help='File name pattern')
+    search.add_argument('--content', help='Search file contents')
+    search.add_argument('--case-sensitive', action='store_true', help='Case sensitive search')
     
     # Duplicates command
-    dup_parser = subparsers.add_parser('duplicates', help='Find duplicate files')
-    dup_parser.add_argument('--dir', required=True, help='Directory to search')
-    dup_parser.add_argument('--recursive', action='store_true', default=True, help='Search recursively')
+    dup = subparsers.add_parser('duplicates', help='Find duplicate files')
+    dup.add_argument('--dir', required=True, help='Directory to search')
+    dup.add_argument('--recursive', action='store_true', default=True, help='Search recursively')
+    dup.add_argument('--resolve', choices=['newest', 'oldest', 'interactive'], help='Resolve duplicates strategy')
     
     # Cleanup command
-    cleanup_parser = subparsers.add_parser('cleanup', help='Clean up old files')
-    cleanup_parser.add_argument('--dir', required=True, help='Directory to clean')
-    cleanup_parser.add_argument('--days', type=int, required=True, help='Delete files older than N days')
-    cleanup_parser.add_argument('--dry-run', action='store_true', help='Show what would be deleted without deleting')
-    cleanup_parser.add_argument('--recursive', action='store_true', help='Search recursively')
+    cleanup = subparsers.add_parser('cleanup', help='Clean up old files')
+    cleanup.add_argument('--dir', required=True, help='Directory to clean')
+    cleanup.add_argument('--days', type=int, required=True, help='Delete files older than N days')
+    cleanup.add_argument('--dry-run', action='store_true', help='Show what would be deleted without deleting')
+    cleanup.add_argument('--recursive', action='store_true', help='Search recursively')
     
     # Rename command
-    rename_parser = subparsers.add_parser('rename', help='Batch rename files')
-    rename_parser.add_argument('--dir', required=True, help='Directory containing files')
-    rename_parser.add_argument('--pattern', required=True, help='Text pattern to match')
-    rename_parser.add_argument('--replacement', required=True, help='Replacement text')
-    rename_parser.add_argument('--recursive', action='store_true', help='Process subdirectories')
+    rename = subparsers.add_parser('rename', help='Batch rename files')
+    rename.add_argument('--dir', required=True, help='Directory containing files')
+    rename.add_argument('--pattern', required=True, help='Text pattern to match')
+    rename.add_argument('--replacement', required=True, help='Replacement text')
+    rename.add_argument('--recursive', action='store_true', help='Process subdirectories')
+
+    # Config command
+    config = subparsers.add_parser('config', help='Manage configuration')
+    config.add_argument('--edit', action='store_true', help='Edit configuration file')
     
     return parser
 
+async def monitor_progress(queue: asyncio.Queue, task_description: str, total: Optional[int] = None):
+    """Monitor progress queue and update rich progress bar."""
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TimeRemainingColumn(),
+        console=console
+    ) as progress:
+        task_id = progress.add_task(task_description, total=total)
 
-def handle_organize(args):
-    """Handle the organize command."""
+        while True:
+            item = await queue.get()
+            if item is None:
+                break
+
+            progress.console.print(f"Processed: {item}")
+            progress.advance(task_id)
+
+async def handle_organize(args):
     organizer = FileOrganizer()
     source = Path(args.source)
     target = Path(args.target)
 
     if not source.exists():
-        print(f"Error: Source directory does not exist: {source}")
+        if args.json:
+             print(json.dumps({"error": f"Source directory does not exist: {source}"}))
+        else:
+             console.print(f"[bold red]Error:[/bold red] Source directory does not exist: {source}")
         return 1
 
+    progress_queue = asyncio.Queue() if not args.json else None
+
+    task = None
     if args.by_type:
-        result = organizer.organize_by_type(source, target, move=args.move)
-        print(f"Organized files by type:")
-        for category, files in result.items():
-            print(f"  {category}: {len(files)} files")
+        task = asyncio.create_task(organizer.organize_by_type(source, target, move=args.move, progress_queue=progress_queue))
     elif args.by_date:
-        result = organizer.organize_by_date(source, target, move=args.move)
-        print(f"Organized files by date:")
-        for date, files in result.items():
-            print(f"  {date}: {len(files)} files")
+        task = asyncio.create_task(organizer.organize_by_date(source, target, move=args.move, progress_queue=progress_queue))
     else:
-        print("Error: Specify either --by-type or --by-date")
+        if args.json:
+            print(json.dumps({"error": "Specify --by-type or --by-date"}))
+        else:
+            console.print("[bold red]Error:[/bold red] Specify either --by-type or --by-date")
         return 1
+
+    if progress_queue:
+        monitor_task = asyncio.create_task(monitor_progress(progress_queue, "Organizing files..."))
+        result = await task
+        await progress_queue.put(None)
+        await monitor_task
+    else:
+        result = await task
+
+    # Summary
+    if args.json:
+        # result is Dict[str, List[Path]]
+        # Convert Path to str
+        json_result = {k: [str(p) for p in v] for k, v in result.items()}
+        print(json.dumps(json_result, indent=2))
+    else:
+        table = Table(title="Organization Summary")
+        table.add_column("Category", style="cyan")
+        table.add_column("Count", style="green")
+
+        for category, files in result.items():
+            table.add_row(category, str(len(files)))
+
+        console.print(table)
 
     return 0
 
-
-def handle_search(args):
-    """Handle the search command."""
+async def handle_search(args):
     searcher = FileSearcher()
     directory = Path(args.dir)
 
     if not directory.exists():
-        print(f"Error: Directory does not exist: {directory}")
+        if args.json:
+             print(json.dumps({"error": f"Directory does not exist: {directory}"}))
+        else:
+             console.print(f"[bold red]Error:[/bold red] Directory does not exist: {directory}")
         return 1
 
+    results = []
     if args.name:
-        results = searcher.search_by_name(
-            directory,
-            args.name,
-            case_sensitive=args.case_sensitive
-        )
-        print(f"Found {len(results)} files matching '{args.name}':")
-        for path in results:
-            print(f"  {path}")
+        results = searcher.search_by_name(directory, args.name, case_sensitive=args.case_sensitive)
     elif args.content:
-        results = searcher.search_by_content(
-            directory,
-            args.content,
-            case_sensitive=args.case_sensitive
-        )
-        print(f"Found {len(results)} files containing '{args.content}':")
+        results = searcher.search_by_content(directory, args.content, case_sensitive=args.case_sensitive)
+
+    if args.json:
+        print(json.dumps([str(p) for p in results], indent=2))
+    else:
+        console.print(f"Found {len(results)} files:")
         for path in results:
-            print(f"  {path}")
-    else:
-        print("Error: Specify either --name or --content")
-        return 1
-
+            console.print(f"  {path}")
     return 0
 
-
-def handle_duplicates(args):
-    """Handle the duplicates command."""
+async def handle_duplicates(args):
     organizer = FileOrganizer()
     directory = Path(args.dir)
 
-    if not directory.exists():
-        print(f"Error: Directory does not exist: {directory}")
-        return 1
+    progress_queue = asyncio.Queue() if not args.json else None
 
-    print(f"Searching for duplicates in {directory}...")
-    duplicates = organizer.find_duplicates(directory, recursive=args.recursive)
+    duplicates = await organizer.find_duplicates(directory, recursive=args.recursive)
 
-    if duplicates:
-        print(f"Found {len(duplicates)} groups of duplicate files:")
-        for hash_val, files in duplicates.items():
-            print(f"\n  Duplicate group ({len(files)} files):")
-            for path in files:
-                print(f"    {path}")
+    if args.resolve:
+        strategy = ConflictResolutionStrategy.INTERACTIVE
+        if args.resolve == 'newest':
+            strategy = ConflictResolutionStrategy.KEEP_NEWEST
+        elif args.resolve == 'oldest':
+            strategy = ConflictResolutionStrategy.KEEP_OLDEST
+
+        if strategy == ConflictResolutionStrategy.INTERACTIVE:
+             if args.json:
+                 pass
+             else:
+                 console.print("Interactive mode not supported in CLI.")
+        else:
+             deleted = await organizer.resolve_duplicates(duplicates, strategy, progress_queue)
+             if args.json:
+                 print(json.dumps({"deleted": [str(p) for p in deleted]}, indent=2))
+             else:
+                 console.print(f"Resolved duplicates. Deleted {len(deleted)} files.")
+             return 0
+
+    if args.json:
+        # Convert Path to str
+        json_result = {k: [str(p) for p in v] for k, v in duplicates.items()}
+        print(json.dumps(json_result, indent=2))
     else:
-        print("No duplicates found.")
-
+        if duplicates:
+            console.print(f"Found {len(duplicates)} groups of duplicate files:")
+            for hash_val, files in duplicates.items():
+                console.print(f"\n  Duplicate group ({len(files)} files):", style="bold yellow")
+                for path in files:
+                    console.print(f"    {path}")
+        else:
+            console.print("No duplicates found.")
     return 0
 
-
-def handle_cleanup(args):
-    """Handle the cleanup command."""
+async def handle_cleanup(args):
     organizer = FileOrganizer()
     directory = Path(args.dir)
 
-    if not directory.exists():
-        print(f"Error: Directory does not exist: {directory}")
-        return 1
+    progress_queue = asyncio.Queue() if not args.json else None
 
-    old_files = organizer.cleanup_old_files(
-        directory,
-        args.days,
-        recursive=args.recursive,
-        dry_run=args.dry_run
-    )
+    # Start task
+    task = asyncio.create_task(organizer.cleanup_old_files(
+        directory, args.days, args.recursive, args.dry_run, progress_queue
+    ))
 
-    if args.dry_run:
-        print(f"Would delete {len(old_files)} files older than {args.days} days:")
+    if progress_queue:
+        monitor_task = asyncio.create_task(monitor_progress(progress_queue, "Cleaning up files..."))
+        old_files = await task
+        await progress_queue.put(None)
+        await monitor_task
     else:
-        print(f"Deleted {len(old_files)} files older than {args.days} days:")
+        old_files = await task
 
-    for path in old_files:
-        print(f"  {path}")
-
+    if args.json:
+        print(json.dumps([str(p) for p in old_files], indent=2))
+    else:
+        action = "Would delete" if args.dry_run else "Deleted"
+        console.print(f"{action} {len(old_files)} files:")
+        for path in old_files:
+            console.print(f"  {path}")
     return 0
 
-
-def handle_rename(args):
-    """Handle the rename command."""
+async def handle_rename(args):
     organizer = FileOrganizer()
     directory = Path(args.dir)
 
-    if not directory.exists():
-        print(f"Error: Directory does not exist: {directory}")
-        return 1
+    progress_queue = asyncio.Queue() if not args.json else None
 
-    renamed = organizer.batch_rename(
-        directory,
-        args.pattern,
-        args.replacement,
-        recursive=args.recursive
-    )
+    task = asyncio.create_task(organizer.batch_rename(
+        directory, args.pattern, args.replacement, args.recursive, progress_queue
+    ))
 
-    print(f"Renamed {len(renamed)} files:")
-    for path in renamed:
-        print(f"  {path}")
+    if progress_queue:
+        monitor_task = asyncio.create_task(monitor_progress(progress_queue, "Renaming files..."))
+        renamed = await task
+        await progress_queue.put(None)
+        await monitor_task
+    else:
+        renamed = await task
 
+    if args.json:
+        print(json.dumps([str(p) for p in renamed], indent=2))
+    else:
+        console.print(f"Renamed {len(renamed)} files:")
+        for path in renamed:
+            console.print(f"  {path}")
     return 0
 
+async def handle_undo(args):
+    file_ops = FileOperations()
+    result = await file_ops.undo_last()
+    if args.json:
+        print(json.dumps({"result": result}))
+    else:
+        console.print(f"[bold]Undo Result:[/bold] {result}")
 
-def main():
-    """Main CLI entry point."""
+async def handle_redo(args):
+    file_ops = FileOperations()
+    result = await file_ops.redo_last()
+    if args.json:
+        print(json.dumps({"result": result}))
+    else:
+        console.print(f"[bold]Redo Result:[/bold] {result}")
+
+async def handle_config(args):
+    config_manager = ConfigManager()
+    config_path = config_manager.get_config_path()
+
+    if args.edit:
+        editor = os.environ.get('EDITOR', 'nano')
+        subprocess.call([editor, str(config_path)])
+    else:
+        console.print(f"Configuration file: {config_path}")
+        categories = config_manager.load_categories()
+        console.print(categories)
+
+async def main_async():
     parser = setup_parser()
     args = parser.parse_args()
     
+    if args.undo:
+        await handle_undo(args)
+        return 0
+    if args.redo:
+        await handle_redo(args)
+        return 0
+
     if not args.command:
         parser.print_help()
         return 1
@@ -229,21 +323,28 @@ def main():
         'search': handle_search,
         'duplicates': handle_duplicates,
         'cleanup': handle_cleanup,
-        'rename': handle_rename
+        'rename': handle_rename,
+        'config': handle_config
     }
 
-    try:
-        handler = command_handlers.get(args.command)
-        if handler:
-            return handler(args)
-        else:
-            print(f"Error: Unknown command '{args.command}'", file=sys.stderr)
+    handler = command_handlers.get(args.command)
+    if handler:
+        try:
+            return await handler(args)
+        except Exception as e:
+            if args.json:
+                 print(json.dumps({"error": str(e)}))
+            else:
+                 console.print(f"[bold red]Error:[/bold red] {str(e)}")
             return 1
-            
-    except Exception as e:
-        print(f"Error: {str(e)}", file=sys.stderr)
+    else:
         return 1
 
+def main():
+    try:
+        sys.exit(asyncio.run(main_async()))
+    except KeyboardInterrupt:
+        sys.exit(1)
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()

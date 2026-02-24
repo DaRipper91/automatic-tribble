@@ -2,11 +2,14 @@
 Screens for the file manager application.
 """
 
+from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Static, Log, ProgressBar
-from textual.containers import Container, Horizontal, Vertical, Grid
+from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar
+from textual.containers import Container, Horizontal, Vertical
 from textual.binding import Binding
+
+from .ai_utils import AIExecutor
 
 
 class StartupScreen(Screen):
@@ -188,8 +191,6 @@ class UserModeConfigScreen(ModalScreen[str]):
         elif event.button.id == "cancel":
             self.dismiss(None)
 
-
-from .ai_utils import AIExecutor
 
 
 class AIConfigScreen(Screen):
@@ -385,7 +386,7 @@ class ProgressScreen(ModalScreen):
             yield Label(self.message, id="status-label")
             yield ProgressBar(total=100, show_eta=True, id="progress-bar")
 
-    def update_progress(self, progress: float, message: str = None) -> None:
+    def update_progress(self, progress: float, message: Optional[str] = None) -> None:
         bar = self.query_one(ProgressBar)
         bar.update(progress=progress)
         if message:

@@ -2,7 +2,6 @@
 Gemini Integration Mock for File Manager AI
 """
 
-import os
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -130,7 +129,7 @@ class GeminiClient:
 
         return action_data
 
-    def execute_command(self, action_data: Dict[str, Any]) -> str:
+    async def execute_command(self, action_data: Dict[str, Any]) -> str:
         """
         Execute the action determined by process_command.
 
@@ -148,7 +147,7 @@ class GeminiClient:
                 source = Path(params["source_dir"])
                 target = Path(params["target_dir"])
                 move = params.get("move", False)
-                result = self.organizer.organize_by_type(source, target, move=move)
+                result = await self.organizer.organize_by_type(source, target, move=move)
                 count = sum(len(files) for files in result.values())
                 return f"Successfully organized {count} files by type into {target}."
 
@@ -156,7 +155,7 @@ class GeminiClient:
                 source = Path(params["source_dir"])
                 target = Path(params["target_dir"])
                 move = params.get("move", False)
-                result = self.organizer.organize_by_date(source, target, move=move)
+                result = await self.organizer.organize_by_date(source, target, move=move)
                 count = sum(len(files) for files in result.values())
                 return f"Successfully organized {count} files by date into {target}."
 
@@ -166,14 +165,14 @@ class GeminiClient:
                 recursive = params.get("recursive", False)
                 dry_run = params.get("dry_run", False)
 
-                deleted = self.organizer.cleanup_old_files(directory, days, recursive, dry_run)
+                deleted = await self.organizer.cleanup_old_files(directory, days, recursive, dry_run)
                 action_str = "Would delete" if dry_run else "Deleted"
                 return f"{action_str} {len(deleted)} files older than {days} days."
 
             elif action == "find_duplicates":
                 directory = Path(params["directory"])
                 recursive = params.get("recursive", False)
-                duplicates = self.organizer.find_duplicates(directory, recursive)
+                duplicates = await self.organizer.find_duplicates(directory, recursive)
                 count = sum(len(files) for files in duplicates.values())
                 return f"Found {len(duplicates)} groups of duplicates ({count} files total)."
 
@@ -182,7 +181,7 @@ class GeminiClient:
                 pattern = params["pattern"]
                 replacement = params["replacement"]
                 recursive = params.get("recursive", False)
-                renamed = self.organizer.batch_rename(directory, pattern, replacement, recursive)
+                renamed = await self.organizer.batch_rename(directory, pattern, replacement, recursive)
                 return f"Renamed {len(renamed)} files matching '{pattern}'."
 
             else:
