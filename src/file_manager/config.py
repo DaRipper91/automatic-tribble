@@ -1,7 +1,11 @@
 """
 Configuration management for TFM.
 """
-import yaml
+try:
+    import yaml
+except ImportError:
+    raise ImportError("PyYAML is required for configuration management. Please install it with `pip install PyYAML`.")
+
 from pathlib import Path
 from typing import Dict, List, Optional
 from .logger import get_logger

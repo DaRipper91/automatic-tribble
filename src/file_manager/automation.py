@@ -58,7 +58,7 @@ class FileOrganizer:
             extension_map = self.extension_map
         else:
             extension_map = self._build_extension_map(categories)
-            
+
         return await self._organize_generic(
             source_dir,
             target_dir,

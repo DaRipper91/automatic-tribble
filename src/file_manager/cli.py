@@ -110,7 +110,7 @@ async def handle_organize(args):
         if args.json:
              print(json.dumps({"error": f"Source directory does not exist: {source}"}))
         else:
-             console.print(f"[bold red]Error:[/ bold red] Source directory does not exist: {source}")
+             console.print(f"[bold red]Error:[/bold red] Source directory does not exist: {source}")
         return 1
 
     progress_queue = asyncio.Queue() if not args.json else None
@@ -124,7 +124,7 @@ async def handle_organize(args):
         if args.json:
             print(json.dumps({"error": "Specify --by-type or --by-date"}))
         else:
-            console.print("[bold red]Error:[/ bold red] Specify either --by-type or --by-date")
+            console.print("[bold red]Error:[/bold red] Specify either --by-type or --by-date")
         return 1
 
     if progress_queue:
@@ -161,7 +161,7 @@ async def handle_search(args):
         if args.json:
              print(json.dumps({"error": f"Directory does not exist: {directory}"}))
         else:
-             console.print(f"[bold red]Error:[/ bold red] Directory does not exist: {directory}")
+             console.print(f"[bold red]Error:[/bold red] Directory does not exist: {directory}")
         return 1
 
     results = []
@@ -281,7 +281,7 @@ async def handle_undo(args):
     if args.json:
         print(json.dumps({"result": result}))
     else:
-        console.print(f"[bold]Undo Result:[/ bold] {result}")
+        console.print(f"[bold]Undo Result:[/bold] {result}")
 
 async def handle_redo(args):
     file_ops = FileOperations()
@@ -289,7 +289,7 @@ async def handle_redo(args):
     if args.json:
         print(json.dumps({"result": result}))
     else:
-        console.print(f"[bold]Redo Result:[/ bold] {result}")
+        console.print(f"[bold]Redo Result:[/bold] {result}")
 
 async def handle_config(args):
     config_manager = ConfigManager()
@@ -335,7 +335,7 @@ async def main_async():
             if args.json:
                  print(json.dumps({"error": str(e)}))
             else:
-                 console.print(f"[bold red]Error:[/ bold red] {str(e)}")
+                 console.print(f"[bold red]Error:[/bold red] {str(e)}")
             return 1
     else:
         return 1

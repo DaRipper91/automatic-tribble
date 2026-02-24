@@ -170,7 +170,7 @@ tfm-auto duplicates --dir ./Photos --resolve oldest
 **Resolution Strategies:**
 - `newest`: Keeps the file with the most recent modification time.
 - `oldest`: Keeps the file with the oldest modification time.
-- `interactive`: (Currently CLI only) Prompts you to choose which file to keep.
+- `interactive`: (Not currently supported in CLI) Prompts you to choose which file to keep.
 
 ### 5. Batch Rename
 Rename multiple files using a simple pattern match.
@@ -215,7 +215,7 @@ Extend functionality by adding Python scripts to `~/.tfm/plugins/`.
     ```
 2.  **Create a plugin file** (e.g., `my_plugin.py`):
     ```python
-    from src.file_manager.plugins.registry import TFMPlugin
+    from src.file_manager.plugins import TFMPlugin
 
     class MyPlugin(TFMPlugin):
         def on_file_added(self, path):

@@ -31,6 +31,7 @@ class PluginRegistry:
 
     def load_plugins(self) -> None:
         """Load plugins from the plugin directory."""
+        self.plugins.clear()
         if not self.plugin_dir.exists():
             try:
                 self.plugin_dir.mkdir(parents=True, exist_ok=True)

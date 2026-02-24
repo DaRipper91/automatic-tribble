@@ -2,6 +2,7 @@
 Screens for the file manager application.
 """
 
+from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar
@@ -384,7 +385,7 @@ class ProgressScreen(ModalScreen):
             yield Label(self.message, id="status-label")
             yield ProgressBar(total=100, show_eta=True, id="progress-bar")
 
-    def update_progress(self, progress: float, message: str | None = None) -> None:
+    def update_progress(self, progress: float, message: Optional[str] = None) -> None:
         bar = self.query_one(ProgressBar)
         bar.update(progress=progress)
         if message:

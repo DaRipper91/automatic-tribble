@@ -56,6 +56,7 @@ class OperationHistory:
     def _save(self):
         try:
             import pickle
+            self.history_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.history_file, "wb") as f:
                 pickle.dump({"undo": self._undo_stack, "redo": self._redo_stack}, f)
         except Exception:
