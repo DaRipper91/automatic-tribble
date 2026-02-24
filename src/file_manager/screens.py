@@ -111,7 +111,7 @@ class LauncherScreen(Screen):
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "user-mode":
-            def on_mode_selected(mode: str) -> None:
+            def on_mode_selected(mode: Optional[str]) -> None:
                 if mode:
                     # Set the layout mode on the main app
                     if hasattr(self.app, "layout_mode"):
@@ -166,8 +166,8 @@ class UserModeConfigScreen(ModalScreen[str]):
 
     BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
 
-    def action_dismiss(self) -> None:
-        self.dismiss(None)
+    async def action_dismiss(self, result: Optional[str] = None) -> None:
+        self.dismiss(result)
 
     def compose(self) -> ComposeResult:
         with Container(id="config-dialog"):
@@ -304,7 +304,7 @@ class AIConfigScreen(Screen):
             log.write_line(f"[italic]{status}[/]")
 
             # Ask for confirmation to run
-            def check_confirm(confirmed: bool) -> None:
+            def check_confirm(confirmed: Optional[bool]) -> None:
                 if confirmed:
                     log.write_line("[yellow]Executing command...[/]")
                     # Execute the command locally
@@ -389,7 +389,8 @@ class ProgressScreen(ModalScreen):
         bar = self.query_one(ProgressBar)
         bar.update(progress=progress)
         if message:
-            self.query_one("#status-label").update(message)
+            label = self.query_one("#status-label", Label)
+            label.update(message)
 
 
 # Keep existing ConfirmationScreen and HelpScreen
@@ -433,7 +434,7 @@ class ConfirmationScreen(ModalScreen[bool]):
 
     BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
 
-    def action_dismiss(self) -> None:
+    async def action_dismiss(self, result: Optional[bool] = None) -> None:
         self.dismiss(False)
 
     def __init__(self, message: str, confirm_label: str = "Delete", confirm_variant: str = "error"):
@@ -447,7 +448,8 @@ class ConfirmationScreen(ModalScreen[bool]):
             yield Label(self.message, id="question")
             with Horizontal(id="buttons"):
                 yield Button("Cancel", variant="primary", id="cancel")
-                yield Button(self.confirm_label, variant=self.confirm_variant, id="confirm")
+                # ignore type error for variant string, as it is dynamically passed but safe
+                yield Button(self.confirm_label, variant=self.confirm_variant, id="confirm")  # type: ignore
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":
@@ -594,7 +596,7 @@ class InputScreen(ModalScreen[str]):
 
     BINDINGS = [Binding("escape", "dismiss", "Dismiss")]
 
-    def action_dismiss(self) -> None:
+    async def action_dismiss(self, result: Optional[str] = None) -> None:
         self.dismiss("")
 
     def __init__(self, title: str, message: str, initial_value: str = ""):

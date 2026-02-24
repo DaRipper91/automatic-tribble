@@ -1,6 +1,5 @@
 import sys
 import os
-import asyncio
 import unittest
 from unittest.mock import MagicMock, patch, AsyncMock
 

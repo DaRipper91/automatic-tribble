@@ -1,11 +1,9 @@
 
 import time
 import pytest
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from textual.app import App, ComposeResult
-from textual.pilot import Pilot
 
 from src.file_manager.user_mode import UserModeScreen
 

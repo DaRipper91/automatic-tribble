@@ -2,6 +2,7 @@
 AI Mode Screen - Automation Interface
 """
 
+from typing import Optional
 from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -189,7 +190,7 @@ class AIModeScreen(Screen):
         log.write(f"[bold purple]AI Plan:[/ bold purple] {action_data['description']}")
 
         # 2. Execute
-        def check_confirm(confirmed: bool) -> None:
+        def check_confirm(confirmed: Optional[bool]) -> None:
             if confirmed:
                 self._execute_command_worker(action_data)
             else:

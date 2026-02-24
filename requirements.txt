@@ -1,2 +1,10 @@
 textual>=0.47.0
 rich>=13.7.0
+jinja2
+jsonschema
+croniter
+PyYAML
+pytest
+pytest-asyncio
+ruff
+mypy
