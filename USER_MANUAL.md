@@ -102,10 +102,16 @@ AI Mode uses natural language processing to understand your intent and execute c
 ### How to Use
 1.  **Select Target Directory**: Enter the path where you want operations to happen (default is current directory).
 2.  **Enter Command**: Type what you want to do in plain English.
-    - *Example:* "Organize all PDFs into a Documents folder."
+    - *Example:* "Organize all PDFs into a Documents folder and clean up files older than 30 days."
     - *Example:* "Find and delete duplicate images."
 3.  **Process**: Click **Process** or press `Enter`.
-4.  **Review & Execute**: The AI will propose a plan. Review it and confirm execution.
+4.  **Review Plan**: The AI will propose a structured plan with steps.
+5.  **Dry Run Simulation**: TFM will simulate the plan and show you exactly what will change (files moved, deleted, etc.) with color-coded feedback.
+6.  **Confirm**: Click **Confirm & Execute** to apply the changes.
+
+### Command History
+- Use `Up` / `Down` arrows in the input box to cycle through previous commands.
+- Click **Search History** to find past commands.
 
 ### ✨ Quick Actions
 The left panel provides buttons for common tasks:
@@ -179,7 +185,40 @@ Rename multiple files using a simple pattern match.
 tfm-auto rename --dir ./Photos --pattern "IMG_" --replacement "Vacation_"
 ```
 
-### 6. Undo / Redo
+### 6. File Tagging
+Manage custom tags for your files.
+```bash
+# Add a tag
+tfm-auto tags --add ./document.pdf important
+
+# List all tags
+tfm-auto tags --list
+
+# Find files by tag
+tfm-auto tags --search important
+
+# Remove a tag
+tfm-auto tags --remove ./document.pdf important
+```
+
+### 7. Task Scheduler
+Automate recurring tasks using cron expressions.
+```bash
+# List scheduled jobs
+tfm-auto schedule --list
+
+# Add a job (e.g., organize downloads daily at midnight)
+# Note: Params must be valid JSON
+tfm-auto schedule --add "daily_org" "0 0 * * *" "organize_by_type" '{"source": "/home/user/Downloads", "target": "/home/user/Sorted"}'
+
+# Remove a job
+tfm-auto schedule --remove "daily_org"
+
+# Run the scheduler daemon (keeps running)
+tfm-auto schedule --daemon
+```
+
+### 8. Undo / Redo
 Revert accidental changes. The history is persisted to `~/.tfm/history.pkl`.
 ```bash
 # Undo the last operation
@@ -189,7 +228,7 @@ tfm-auto --undo
 tfm-auto --redo
 ```
 
-### 7. Configuration
+### 9. Configuration
 Manage settings.
 ```bash
 # Open configuration file in default editor

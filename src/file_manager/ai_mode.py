@@ -2,7 +2,10 @@
 AI Mode Screen - Automation Interface
 """
 
-from typing import Optional
+import asyncio
+import json
+import time
+from typing import Optional, Dict, Any, List
 from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
@@ -67,12 +70,59 @@ class AIModeScreen(Screen):
 
     BINDINGS = [
         Binding("escape", "back_to_menu", "Back to Menu", priority=True),
+        Binding("up", "history_up", "Previous Command"),
+        Binding("down", "history_down", "Next Command"),
     ]
 
     def __init__(self):
         super().__init__()
         self.gemini_client = GeminiClient()
         self.current_dir = Path.cwd()
+        self.current_plan: List[Dict[str, Any]] = []
+        self.history: List[Dict[str, Any]] = self._load_history()
+        self.history_index = -1
+
+    def _load_history(self) -> List[Dict[str, Any]]:
+        path = Path.home() / ".tfm" / "command_history.json"
+        if path.exists():
+            try:
+                with open(path, "r") as f:
+                    return json.load(f)
+            except Exception:
+                return []
+        return []
+
+    def _save_history_entry(self, command: str, plan: List[Dict[str, Any]], status: str):
+        entry = {
+            "timestamp": time.time(),
+            "command": command,
+            "plan": plan,
+            "status": status
+        }
+        self.history.append(entry)
+        path = Path.home() / ".tfm" / "command_history.json"
+        try:
+            with open(path, "w") as f:
+                json.dump(self.history, f, indent=2)
+        except Exception:
+            pass
+
+    def action_history_up(self):
+        if not self.history:
+            return
+        if self.history_index < len(self.history) - 1:
+            self.history_index += 1
+            cmd = self.history[-(self.history_index+1)]["command"]
+            self.query_one("#command_input", Input).value = cmd
+
+    def action_history_down(self):
+        if self.history_index > 0:
+            self.history_index -= 1
+            cmd = self.history[-(self.history_index+1)]["command"]
+            self.query_one("#command_input", Input).value = cmd
+        elif self.history_index == 0:
+            self.history_index = -1
+            self.query_one("#command_input", Input).value = ""
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -98,6 +148,10 @@ class AIModeScreen(Screen):
                         yield Input(placeholder="Describe what you want to do...", id="command_input", classes="command-input")
                         yield Button("Process", id="process_btn", variant="primary")
 
+                    with Horizontal(id="history-container"):
+                         yield Button("Search History", id="history_btn", variant="default")
+                         yield Button("Suggest Tags", id="suggest_tags_btn", variant="warning")
+
                     yield Label("Output Log:", classes="section-title")
                     yield RichLog(id="output_log", wrap=True, highlight=True, markup=True)
 
@@ -121,6 +175,11 @@ class AIModeScreen(Screen):
 
         if btn_id == "process_btn":
             self._process_command()
+        elif btn_id == "history_btn":
+            query = command_input.value.strip()
+            self._search_history_worker(query)
+        elif btn_id == "suggest_tags_btn":
+            self._suggest_tags()
         elif btn_id == "btn_org_type":
             command_input.value = "Organize files by type"
             command_input.focus()
@@ -148,16 +207,139 @@ class AIModeScreen(Screen):
         log.write(message)
 
     @work(thread=True)
-    def _execute_command_worker(self, action_data: dict) -> None:
-        """Execute the command in a worker thread."""
-        self.app.call_from_thread(self._log_message, "[dim]Executing...[/]")
+    def _generate_plan_worker(self, command: str, target_path: Path) -> None:
+        """Generate a plan in background."""
+        self.app.call_from_thread(self._log_message, f"[dim]Thinking... Context: {target_path}[/]")
 
-        result = self.gemini_client.execute_command(action_data)
+        try:
+            plan_data = self.gemini_client.generate_plan(command, target_path)
+            self.current_plan = plan_data.get("plan", [])
 
-        if result.startswith("Error"):
-            self.app.call_from_thread(self._log_message, f"[bold red]Result:[/ bold red] {result}")
-        else:
-            self.app.call_from_thread(self._log_message, f"[bold green]Result:[/ bold green] {result}")
+            if not self.current_plan:
+                self.app.call_from_thread(self._log_message, "[red]AI could not generate a plan.[/]")
+                return
+
+            # Display plan
+            msg = "\n[bold purple]AI Proposed Plan:[/bold purple]\n"
+            for step in self.current_plan:
+                icon = "🗑️" if step.get("is_destructive") else "📝"
+                msg += f"{step['step']}. {icon} [bold]{step['action']}[/]: {step['description']}\n"
+
+            # Dry Run Simulation
+            msg += "\n[bold cyan]Dry Run Simulation:[/bold cyan]\n"
+            for step in self.current_plan:
+                 # Running dry run for each step to get prediction
+                 try:
+                     res = asyncio.run(self.gemini_client.execute_plan_step(step, dry_run=True))
+                     if "delete" in res.lower() or "remove" in res.lower():
+                         color = "red"
+                     elif "move" in res.lower() or "rename" in res.lower() or "organize" in res.lower():
+                         color = "yellow"
+                     else:
+                         color = "green"
+                     msg += f"  Step {step['step']}: [{color}]{res}[/{color}]\n"
+                 except Exception as e:
+                     msg += f"  Step {step['step']}: [red]Simulation failed: {e}[/]\n"
+
+            self.app.call_from_thread(self._log_message, msg)
+
+            # Trigger confirmation flow
+            self.app.call_from_thread(self._request_confirmation, command)
+
+        except Exception as e:
+             self.app.call_from_thread(self._log_message, f"[bold red]Error generating plan:[/bold red] {e}")
+
+    def _request_confirmation(self, command: str) -> None:
+        """Ask user to confirm execution."""
+        def check_confirm(confirmed: Optional[bool]) -> None:
+            if confirmed:
+                self._save_history_entry(command, self.current_plan, "executed")
+                self._execute_plan_worker()
+            else:
+                self._save_history_entry(command, self.current_plan, "cancelled")
+                self._log_message("[yellow]Plan cancelled.[/]")
+
+        self.app.push_screen(
+            ConfirmationScreen(
+                "Execute this plan?",
+                confirm_label="Confirm & Execute",
+                confirm_variant="success"
+            ),
+            check_confirm
+        )
+
+    @work(thread=True)
+    def _execute_plan_worker(self) -> None:
+        """Execute the plan sequentially."""
+        if not hasattr(self, 'current_plan') or not self.current_plan:
+            return
+
+        self.app.call_from_thread(self._log_message, "[bold]Executing Plan...[/]")
+
+        for step in self.current_plan:
+            try:
+                # Real execution (dry_run=False)
+                result = asyncio.run(self.gemini_client.execute_plan_step(step, dry_run=False))
+                self.app.call_from_thread(self._log_message, f"[green]✔ Step {step['step']}: {result}[/]")
+            except Exception as e:
+                self.app.call_from_thread(self._log_message, f"[red]✖ Step {step['step']} Failed: {e}[/]")
+                self.app.call_from_thread(self._log_message, "[bold red]Execution aborted.[/]")
+                return
+
+        self.app.call_from_thread(self._log_message, "[bold green]Plan completed successfully.[/]")
+
+    @work(thread=True)
+    def _search_history_worker(self, query: str) -> None:
+        """Search history using AI."""
+        self.app.call_from_thread(self._log_message, f"\n[dim]Searching history for '{query}'...[/]")
+
+        if not self.history:
+             self.app.call_from_thread(self._log_message, "[yellow]No history available.[/]")
+             return
+
+        results = self.gemini_client.search_history(query, self.history)
+
+        if not results:
+             self.app.call_from_thread(self._log_message, "[dim]No matches found.[/]")
+             return
+
+        self.app.call_from_thread(self._log_message, "\n[bold cyan]History Search Results:[/bold cyan]")
+        for entry in results:
+             ts = time.strftime('%Y-%m-%d %H:%M', time.localtime(entry["timestamp"]))
+             self.app.call_from_thread(self._log_message, f"[{ts}] {entry['command']}")
+
+    @work(thread=True)
+    def _suggest_tags(self) -> None:
+        self.app.call_from_thread(self._log_message, "\n[dim]Analyzing files for tags...[/]")
+
+        files = []
+        try:
+            for p in self.current_dir.iterdir():
+                if p.is_file():
+                    files.append({
+                        "name": p.name,
+                        "size_human": str(p.stat().st_size)
+                    })
+        except Exception:
+            pass
+
+        if not files:
+            self.app.call_from_thread(self._log_message, "[red]No files found to tag.[/]")
+            return
+
+        suggestions = self.gemini_client.suggest_tags(files)
+
+        if not suggestions or not suggestions.get("suggestions"):
+            self.app.call_from_thread(self._log_message, "[yellow]No tags suggested.[/]")
+            return
+
+        msg = "\n[bold yellow]Suggested Tags:[/bold yellow]\n"
+        for item in suggestions.get("suggestions", []):
+            tags = ", ".join(item["tags"])
+            msg += f"- [bold]{item['file']}[/]: {tags}\n"
+
+        self.app.call_from_thread(self._log_message, msg)
+        self.app.call_from_thread(self._log_message, "[dim]Tip: Use 'tag <file> as <tag>' to apply them.[/]")
 
     def _process_command(self) -> None:
         """Process the current command."""
@@ -178,32 +360,6 @@ class AIModeScreen(Screen):
             return
 
         log.write(f"\n[bold blue]Processing command:[/] {command_text}")
-        log.write(f"[dim]Context: {target_path}[/]")
 
-        # 1. Process with Gemini Mock
-        action_data = self.gemini_client.process_command(command_text, target_path)
-
-        if action_data["action"] == "unknown":
-            log.write(f"[bold red]AI:[/ bold red] {action_data['description']}")
-            return
-
-        log.write(f"[bold purple]AI Plan:[/ bold purple] {action_data['description']}")
-
-        # 2. Execute
-        def check_confirm(confirmed: Optional[bool]) -> None:
-            if confirmed:
-                self._execute_command_worker(action_data)
-            else:
-                log.write("[yellow]Command cancelled.[/]")
-
-        self.app.push_screen(
-            ConfirmationScreen(
-                f"Execute command:\n{action_data['description']}?",
-                confirm_label="Execute",
-                confirm_variant="success"
-            ),
-            check_confirm
-        )
-
-        # Clear input? Maybe keep it for reference.
-        # command_input.value = ""
+        # Start background worker
+        self._generate_plan_worker(command_text, target_path)
