@@ -8,15 +8,16 @@ import argparse
 import sys
 import json
 import os
-import subprocess
+from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 # Import rich for progress bars
 try:
     from rich.console import Console
     from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
     from rich.table import Table
+    from rich.prompt import Prompt
 except ImportError:
     print("Error: 'rich' library is required. Please install it.", file=sys.stderr)
     sys.exit(1)
@@ -98,8 +99,41 @@ async def monitor_progress(queue: asyncio.Queue, task_description: str, total: O
             if item is None:
                 break
 
-            progress.console.print(f"Processed: {item}")
+            # If item is a string, it's a status update, otherwise it's a Path
+            msg = str(item)
+            # Truncate if too long
+            if len(msg) > 80:
+                msg = "..." + msg[-77:]
+
+            progress.console.print(f"Processed: {msg}")
             progress.advance(task_id)
+
+def handle_interactive_resolution(files: List[Path]) -> List[Path]:
+    """Callback for interactive duplicate resolution."""
+    console.print("\nDuplicate Group found:", style="bold yellow")
+    for i, file in enumerate(files):
+        try:
+            size_str = FileOperations.format_size(file.stat().st_size)
+            mtime_str = datetime.fromtimestamp(file.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+            console.print(f"  {i+1}. {file} (Size: {size_str}, Modified: {mtime_str})")
+        except OSError:
+             console.print(f"  {i+1}. {file} (Error reading file)")
+
+    choices = [str(i+1) for i in range(len(files))] + ["s"]
+
+    while True:
+        selection = Prompt.ask("Select file to [bold green]KEEP[/bold green] (enter number), or [bold red]s[/bold red]kip", choices=choices, default="s")
+        if selection.lower() == 's':
+            return [] # Keep all (delete none)
+
+        try:
+            idx = int(selection) - 1
+            if 0 <= idx < len(files):
+                # Return all files EXCEPT the selected one (files to delete)
+                return [f for i, f in enumerate(files) if i != idx]
+        except ValueError:
+            pass
+    return []
 
 async def handle_organize(args):
     organizer = FileOrganizer()
@@ -184,7 +218,16 @@ async def handle_duplicates(args):
 
     progress_queue = asyncio.Queue() if not args.json else None
 
-    duplicates = await organizer.find_duplicates(directory, recursive=args.recursive)
+    # Search phase
+    task = asyncio.create_task(organizer.find_duplicates(directory, recursive=args.recursive, progress_queue=progress_queue))
+
+    if progress_queue:
+        monitor_task = asyncio.create_task(monitor_progress(progress_queue, "Scanning for duplicates..."))
+        duplicates = await task
+        await progress_queue.put(None)
+        await monitor_task
+    else:
+        duplicates = await task
 
     if args.resolve:
         strategy = ConflictResolutionStrategy.INTERACTIVE
@@ -192,19 +235,40 @@ async def handle_duplicates(args):
             strategy = ConflictResolutionStrategy.KEEP_NEWEST
         elif args.resolve == 'oldest':
             strategy = ConflictResolutionStrategy.KEEP_OLDEST
+        # Note: interactive is default if resolve is set but not newest/oldest?
+        # Actually argparse choices handles validation, so here we assume it maps correctly.
+        # But wait, choices in setup_parser only listed newest, oldest, interactive.
+        elif args.resolve == 'interactive':
+            strategy = ConflictResolutionStrategy.INTERACTIVE
 
+        interactive_cb = None
         if strategy == ConflictResolutionStrategy.INTERACTIVE:
              if args.json:
-                 pass
+                 print(json.dumps({"error": "Interactive mode not supported with --json"}))
+                 return 1
              else:
-                 console.print("Interactive mode not supported in CLI.")
+                 interactive_cb = handle_interactive_resolution
+
+        # Resolution phase
+        progress_queue = asyncio.Queue() if not args.json else None
+
+        resolve_task = asyncio.create_task(organizer.resolve_duplicates(
+            duplicates, strategy, progress_queue, interactive_callback=interactive_cb
+        ))
+
+        if progress_queue:
+             monitor_task = asyncio.create_task(monitor_progress(progress_queue, "Resolving duplicates..."))
+             deleted = await resolve_task
+             await progress_queue.put(None)
+             await monitor_task
         else:
-             deleted = await organizer.resolve_duplicates(duplicates, strategy, progress_queue)
-             if args.json:
-                 print(json.dumps({"deleted": [str(p) for p in deleted]}, indent=2))
-             else:
-                 console.print(f"Resolved duplicates. Deleted {len(deleted)} files.")
-             return 0
+             deleted = await resolve_task
+
+        if args.json:
+            print(json.dumps({"deleted": [str(p) for p in deleted]}, indent=2))
+        else:
+            console.print(f"Resolved duplicates. Deleted {len(deleted)} files.")
+        return 0
 
     if args.json:
         # Convert Path to str
@@ -297,7 +361,11 @@ async def handle_config(args):
 
     if args.edit:
         editor = os.environ.get('EDITOR', 'nano')
-        subprocess.call([editor, str(config_path)])
+        try:
+            process = await asyncio.create_subprocess_exec(editor, str(config_path))
+            await process.wait()
+        except FileNotFoundError:
+             console.print(f"[bold red]Error:[/bold red] Editor '{editor}' not found.")
     else:
         console.print(f"Configuration file: {config_path}")
         categories = config_manager.load_categories()

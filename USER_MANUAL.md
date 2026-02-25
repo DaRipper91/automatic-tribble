@@ -119,10 +119,10 @@ The left panel provides buttons for common tasks:
 
 ## ⚡ CLI Automation (`tfm-auto`)
 
-For scripting and cron jobs, use the command-line interface. Use `--json` flag for machine-readable output.
+For scripting and cron jobs, use the command-line interface. Use `--json` flag for machine-readable output, perfect for piping into other tools.
 
 ### 1. Organize Files
-Sort files into folders based on their extension or modification date.
+Sort files into folders based on their extension or modification date. Shows a live progress bar.
 ```bash
 # Organize by file type (e.g., .jpg -> images/, .pdf -> documents/)
 tfm-auto organize --source ./Downloads --target ./Sorted --by-type
@@ -145,7 +145,7 @@ tfm-auto search --dir ./Notes --content "TODO" --json
 ```
 
 ### 3. Cleanup
-Delete old files to free up space.
+Delete old files to free up space. Shows a live progress bar.
 ```bash
 # Delete files older than 60 days (Recursive)
 tfm-auto cleanup --dir ./Temp --days 60 --recursive
@@ -155,7 +155,7 @@ tfm-auto cleanup --dir ./Temp --days 60 --dry-run
 ```
 
 ### 4. Find & Resolve Duplicates
-Scan a directory for identical files. The system uses a multi-pass strategy (size -> partial hash -> full hash) for efficiency.
+Scan a directory for identical files. The system uses a multi-pass strategy (size -> partial hash -> full hash) for efficiency and shows detailed progress.
 
 ```bash
 # Find duplicates
@@ -164,13 +164,15 @@ tfm-auto duplicates --dir ./Photos --recursive
 # Resolve duplicates by keeping the newest version automatically
 tfm-auto duplicates --dir ./Photos --resolve newest
 
-# Resolve duplicates by keeping the oldest version
-tfm-auto duplicates --dir ./Photos --resolve oldest
+# Interactive mode: Prompts you to choose which file to keep for each group
+tfm-auto duplicates --dir ./Photos --resolve interactive
 ```
 **Resolution Strategies:**
 - `newest`: Keeps the file with the most recent modification time.
 - `oldest`: Keeps the file with the oldest modification time.
-- `interactive`: (Not currently supported in CLI) Prompts you to choose which file to keep.
+- `largest`: Keeps the largest file (if sizes differ slightly due to metadata but content is same - rarely used for exact dupes).
+- `smallest`: Keeps the smallest file.
+- `interactive`: Prompts you to choose which file to keep.
 
 ### 5. Batch Rename
 Rename multiple files using a simple pattern match.
@@ -192,7 +194,7 @@ tfm-auto --redo
 ### 7. Configuration
 Manage settings.
 ```bash
-# Open configuration file in default editor
+# Open configuration file in default editor (uses $EDITOR)
 tfm-auto config --edit
 ```
 
@@ -215,13 +217,14 @@ Extend functionality by adding Python scripts to `~/.tfm/plugins/`.
     ```
 2.  **Create a plugin file** (e.g., `my_plugin.py`):
     ```python
-    from src.file_manager.plugins import TFMPlugin
+    from src.file_manager.plugins.base import TFMPlugin
+    from pathlib import Path
 
     class MyPlugin(TFMPlugin):
-        def on_file_added(self, path):
+        def on_file_added(self, path: Path) -> None:
             print(f"Plugin: File added at {path}")
 
-        def on_file_deleted(self, path):
+        def on_file_deleted(self, path: Path) -> None:
             print(f"Plugin: File deleted at {path}")
     ```
 3.  **Restart TFM**: The plugin will be automatically loaded.

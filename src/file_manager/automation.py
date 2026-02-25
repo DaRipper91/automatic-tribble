@@ -187,17 +187,21 @@ class FileOrganizer:
     async def find_duplicates(
         self,
         directory: Path,
-        recursive: bool = True
+        recursive: bool = True,
+        progress_queue: Optional[asyncio.Queue] = None
     ) -> Dict[str, List[Path]]:
         """
         Find duplicate files based on size and content.
         """
-        return await asyncio.to_thread(self._find_duplicates_sync, directory, recursive)
+        loop = asyncio.get_running_loop()
+        return await asyncio.to_thread(self._find_duplicates_sync, directory, recursive, progress_queue, loop)
 
     def _find_duplicates_sync(
         self,
         directory: Path,
-        recursive: bool = True
+        recursive: bool = True,
+        progress_queue: Optional[asyncio.Queue] = None,
+        loop: Optional[asyncio.AbstractEventLoop] = None
     ) -> Dict[str, List[Path]]:
         """Sync implementation of find_duplicates."""
         # First group by size (quick)
@@ -219,6 +223,9 @@ class FileOrganizer:
                     if size not in size_groups:
                         size_groups[size] = []
                     size_groups[size].append(Path(entry.path))
+
+                    if progress_queue and loop:
+                        loop.call_soon_threadsafe(progress_queue.put_nowait, f"Scanning: {entry.name}")
                 except OSError:
                     continue
         except (PermissionError, OSError) as e:
@@ -234,6 +241,9 @@ class FileOrganizer:
             partial_groups: Dict[str, List[Path]] = {}
             for file_path in files:
                 try:
+                    if progress_queue and loop:
+                        loop.call_soon_threadsafe(progress_queue.put_nowait, f"Hashing (partial): {file_path.name}")
+
                     # Use 64KB for partial hash
                     partial_hash = self._compute_partial_hash(file_path, chunk_size=65536, file_size=size)
                     if partial_hash not in partial_groups:
@@ -249,6 +259,9 @@ class FileOrganizer:
 
                 for file_path in partial_files:
                     try:
+                        if progress_queue and loop:
+                            loop.call_soon_threadsafe(progress_queue.put_nowait, f"Hashing (full): {file_path.name}")
+
                         file_hash = self._compute_file_hash(file_path)
                         if file_hash not in duplicates:
                             duplicates[file_hash] = []
@@ -268,7 +281,8 @@ class FileOrganizer:
         self,
         duplicates: Dict[str, List[Path]],
         strategy: ConflictResolutionStrategy,
-        progress_queue: Optional[asyncio.Queue] = None
+        progress_queue: Optional[asyncio.Queue] = None,
+        interactive_callback: Optional[Callable[[List[Path]], List[Path]]] = None
     ) -> List[Path]:
         """
         Resolve duplicates based on strategy.
@@ -281,22 +295,28 @@ class FileOrganizer:
                 continue
 
             sorted_paths = list(paths)
+            to_delete: List[Path] = []
+
             try:
-                if strategy == ConflictResolutionStrategy.KEEP_NEWEST:
-                    sorted_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
-                elif strategy == ConflictResolutionStrategy.KEEP_OLDEST:
-                    sorted_paths.sort(key=lambda p: p.stat().st_mtime)
-                elif strategy == ConflictResolutionStrategy.KEEP_LARGEST:
-                    sorted_paths.sort(key=lambda p: p.stat().st_size, reverse=True)
-                elif strategy == ConflictResolutionStrategy.KEEP_SMALLEST:
-                    sorted_paths.sort(key=lambda p: p.stat().st_size)
-                elif strategy == ConflictResolutionStrategy.INTERACTIVE:
-                    continue
+                if strategy == ConflictResolutionStrategy.INTERACTIVE:
+                    if interactive_callback:
+                        to_delete = interactive_callback(sorted_paths)
+                    else:
+                        continue
+                else:
+                    if strategy == ConflictResolutionStrategy.KEEP_NEWEST:
+                        sorted_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                    elif strategy == ConflictResolutionStrategy.KEEP_OLDEST:
+                        sorted_paths.sort(key=lambda p: p.stat().st_mtime)
+                    elif strategy == ConflictResolutionStrategy.KEEP_LARGEST:
+                        sorted_paths.sort(key=lambda p: p.stat().st_size, reverse=True)
+                    elif strategy == ConflictResolutionStrategy.KEEP_SMALLEST:
+                        sorted_paths.sort(key=lambda p: p.stat().st_size)
+
+                    # Keep first, delete rest
+                    to_delete = sorted_paths[1:]
             except OSError:
                 continue
-
-            # Keep first, delete rest
-            to_delete = sorted_paths[1:]
 
             for p in to_delete:
                 try:
