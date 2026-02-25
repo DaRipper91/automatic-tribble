@@ -9,6 +9,7 @@ import sys
 import json
 import os
 import subprocess
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -25,6 +26,8 @@ from .automation import FileOrganizer, ConflictResolutionStrategy
 from .search import FileSearcher
 from .file_operations import FileOperations
 from .config import ConfigManager
+from .tags import TagManager
+from .scheduler import TaskScheduler
 
 console = Console()
 
@@ -79,6 +82,21 @@ def setup_parser():
     # Config command
     config = subparsers.add_parser('config', help='Manage configuration')
     config.add_argument('--edit', action='store_true', help='Edit configuration file')
+
+    # Tags command
+    tags = subparsers.add_parser('tags', help='Manage file tags')
+    tags.add_argument('--add', nargs=2, metavar=('FILE', 'TAG'), help='Add tag to file')
+    tags.add_argument('--remove', nargs=2, metavar=('FILE', 'TAG'), help='Remove tag from file')
+    tags.add_argument('--list', action='store_true', help='List all tags')
+    tags.add_argument('--search', metavar='TAG', help='List files with tag')
+    tags.add_argument('--cleanup', action='store_true', help='Clean up missing files')
+
+    # Schedule command
+    schedule = subparsers.add_parser('schedule', help='Manage scheduled tasks')
+    schedule.add_argument('--list', action='store_true', help='List scheduled jobs')
+    schedule.add_argument('--add', nargs=4, metavar=('NAME', 'CRON', 'TYPE', 'PARAMS_JSON'), help='Add new job')
+    schedule.add_argument('--remove', metavar='NAME', help='Remove job')
+    schedule.add_argument('--daemon', action='store_true', help='Run scheduler daemon')
     
     return parser
 
@@ -303,6 +321,92 @@ async def handle_config(args):
         categories = config_manager.load_categories()
         console.print(categories)
 
+async def handle_tags(args):
+    manager = TagManager()
+
+    if args.add:
+        path = Path(args.add[0])
+        tag = args.add[1]
+        if not path.exists():
+            console.print(f"[red]File not found: {path}[/]")
+            return 1
+        if manager.add_tag(path, tag):
+            console.print(f"[green]Added tag '{tag}' to {path}[/]")
+        else:
+            console.print(f"[red]Failed to add tag.[/]")
+
+    elif args.remove:
+        path = Path(args.remove[0])
+        tag = args.remove[1]
+        if manager.remove_tag(path, tag):
+             console.print(f"[green]Removed tag '{tag}' from {path}[/]")
+        else:
+             console.print(f"[yellow]Tag not found.[/]")
+
+    elif args.list:
+        tags = manager.list_all_tags()
+        table = Table(title="All Tags")
+        table.add_column("Tag", style="cyan")
+        table.add_column("Count", style="green")
+        for t, c in tags:
+            table.add_row(t, str(c))
+        console.print(table)
+
+    elif args.search:
+        files = manager.get_files_by_tag(args.search)
+        console.print(f"Files with tag '[cyan]{args.search}[/]':")
+        for f in files:
+            console.print(f"  {f}")
+
+    elif args.cleanup:
+        count = manager.cleanup_missing_files()
+        console.print(f"Removed {count} missing files from database.")
+
+    return 0
+
+async def handle_schedule(args):
+    scheduler = TaskScheduler()
+
+    if args.daemon:
+        await scheduler.run_daemon()
+        return 0
+
+    if args.list:
+        jobs = scheduler.list_jobs()
+        table = Table(title="Scheduled Jobs")
+        table.add_column("Name", style="bold")
+        table.add_column("Cron", style="yellow")
+        table.add_column("Type", style="cyan")
+        table.add_column("Last Run", style="dim")
+
+        for job in jobs:
+            last_run = "Never"
+            if job["last_run"]:
+                last_run = datetime.fromtimestamp(job["last_run"]).strftime("%Y-%m-%d %H:%M")
+            table.add_row(job["name"], job["cron"], job["type"], last_run)
+        console.print(table)
+
+    elif args.add:
+        name, cron, type_, params_str = args.add
+        try:
+            params = json.loads(params_str)
+        except json.JSONDecodeError:
+            console.print("[red]Invalid JSON parameters.[/]")
+            return 1
+
+        if scheduler.add_job(name, cron, type_, params):
+            console.print(f"[green]Job '{name}' added.[/]")
+        else:
+             console.print("[red]Failed to add job (invalid cron or type).[/]")
+
+    elif args.remove:
+        if scheduler.remove_job(args.remove):
+            console.print(f"[green]Job '{args.remove}' removed.[/]")
+        else:
+            console.print(f"[yellow]Job '{args.remove}' not found.[/]")
+
+    return 0
+
 async def main_async():
     parser = setup_parser()
     args = parser.parse_args()
@@ -324,7 +428,9 @@ async def main_async():
         'duplicates': handle_duplicates,
         'cleanup': handle_cleanup,
         'rename': handle_rename,
-        'config': handle_config
+        'config': handle_config,
+        'tags': handle_tags,
+        'schedule': handle_schedule
     }
 
     handler = command_handlers.get(args.command)

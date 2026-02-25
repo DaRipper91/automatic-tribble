@@ -48,6 +48,7 @@ class FileOrganizer:
         target_dir: Path,
         categories: Optional[Dict[str, List[str]]] = None,
         move: bool = False,
+        dry_run: bool = False,
         progress_queue: Optional[asyncio.Queue] = None
     ) -> Dict[str, List[Path]]:
         """
@@ -64,6 +65,7 @@ class FileOrganizer:
             target_dir,
             lambda p: self._get_file_category(p, extension_map),
             move,
+            dry_run,
             progress_queue
         )
     
@@ -73,6 +75,7 @@ class FileOrganizer:
         target_dir: Path,
         date_format: str = "%Y/%m",
         move: bool = False,
+        dry_run: bool = False,
         progress_queue: Optional[asyncio.Queue] = None
     ) -> Dict[str, List[Path]]:
         """
@@ -88,6 +91,7 @@ class FileOrganizer:
             target_dir,
             get_date_key,
             move,
+            dry_run,
             progress_queue
         )
 
@@ -97,15 +101,23 @@ class FileOrganizer:
         target_dir: Path,
         key_func: Callable[[Path], Optional[str]],
         move: bool,
+        dry_run: bool,
         progress_queue: Optional[asyncio.Queue] = None
     ) -> Dict[str, List[Path]]:
         """
         Generic method to organize files based on a key generation function.
         """
         organized: Dict[str, List[Path]] = {}
-        await self.file_ops.create_directory(target_dir, exist_ok=True)
 
-        files = list(source_dir.iterdir())
+        if not dry_run:
+            await self.file_ops.create_directory(target_dir, exist_ok=True)
+
+        # files = list(source_dir.iterdir()) # Original
+        # Better safety: use existing iter logic or just keep it simple
+        try:
+            files = list(source_dir.iterdir())
+        except OSError:
+             return {}
         
         for file_path in files:
             if not file_path.is_file():
@@ -123,19 +135,20 @@ class FileOrganizer:
             except (ValueError, RuntimeError):
                 continue
 
-            if not key_dir.exists():
+            if not dry_run and not key_dir.exists():
                 await self.file_ops.create_directory(key_dir, exist_ok=True)
             
             target_path = key_dir / file_path.name
             target_path = self._get_unique_path(target_path)
             
             try:
-                if move:
-                    await self.file_ops.move(file_path, target_path)
-                else:
-                    await self.file_ops.copy(file_path, target_path)
+                if not dry_run:
+                    if move:
+                        await self.file_ops.move(file_path, target_path)
+                    else:
+                        await self.file_ops.copy(file_path, target_path)
 
-                self.file_ops.plugins.on_organize(file_path, target_path)
+                    self.file_ops.plugins.on_organize(file_path, target_path)
 
                 if key not in organized:
                     organized[key] = []
@@ -341,6 +354,7 @@ class FileOrganizer:
         pattern: str,
         replacement: str,
         recursive: bool = False,
+        dry_run: bool = False,
         progress_queue: Optional[asyncio.Queue] = None
     ) -> List[Path]:
         """
@@ -364,7 +378,8 @@ class FileOrganizer:
                     continue
 
                 try:
-                    await self.file_ops.rename(file_path, new_name)
+                    if not dry_run:
+                        await self.file_ops.rename(file_path, new_name)
                     new_path = file_path.parent / new_name
                     renamed_files.append(new_path)
 
