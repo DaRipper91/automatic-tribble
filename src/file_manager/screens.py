@@ -5,7 +5,7 @@ Screens for the file manager application.
 from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar
+from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar, OptionList
 from textual.containers import Container, Horizontal, Vertical
 from textual.binding import Binding
 
@@ -625,3 +625,92 @@ class InputScreen(ModalScreen[str]):
 
     def action_cancel(self):
         self.dismiss("")
+
+
+class ThemeSwitcher(ModalScreen[Optional[str]]):
+    """Screen for switching themes."""
+
+    CSS = """
+    ThemeSwitcher {
+        align: center middle;
+        background: $background 80%;
+    }
+
+    #theme-dialog {
+        width: 40;
+        height: auto;
+        background: $surface;
+        border: thick $primary;
+        padding: 1;
+    }
+
+    #title {
+        text-align: center;
+        margin-bottom: 1;
+        text-style: bold;
+        width: 100%;
+    }
+
+    OptionList {
+        height: auto;
+        max-height: 10;
+        margin-bottom: 1;
+    }
+
+    #buttons {
+        height: auto;
+        width: 100%;
+        align: center bottom;
+    }
+
+    Button {
+        margin: 0 1;
+        width: 1fr;
+    }
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, current_theme: str):
+        super().__init__()
+        self.original_theme = current_theme
+        self.themes = ["dark", "light", "solarized", "dracula"]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="theme-dialog"):
+            yield Label("Select Theme", id="title")
+            yield OptionList(*self.themes, id="theme-list")
+            with Horizontal(id="buttons"):
+                yield Button("Apply", variant="primary", id="apply")
+                yield Button("Cancel", variant="error", id="cancel")
+
+    def on_mount(self) -> None:
+        option_list = self.query_one(OptionList)
+        if self.original_theme in self.themes:
+             idx = self.themes.index(self.original_theme)
+             option_list.highlighted = idx
+
+    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+        if event.option:
+             theme = str(event.option.prompt)
+             if hasattr(self.app, "apply_theme"):
+                self.app.apply_theme(theme)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "apply":
+            option_list = self.query_one(OptionList)
+            if option_list.highlighted is not None:
+                try:
+                    theme = str(option_list.get_option_at_index(option_list.highlighted).prompt)
+                    self.dismiss(theme)
+                except:
+                    self.dismiss(self.original_theme)
+            else:
+                self.dismiss(self.original_theme)
+        elif event.button.id == "cancel":
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        if hasattr(self.app, "apply_theme"):
+            self.app.apply_theme(self.original_theme)
+        self.dismiss(None)

@@ -3,10 +3,12 @@ File panel widget for displaying and navigating files.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 from textual.widgets import DirectoryTree, Static
 from textual.containers import Vertical, Container
 from textual.reactive import reactive
+
+from .ui_components import MultiSelectDirectoryTree
 
 
 class FilePanel(Container):
@@ -47,17 +49,17 @@ class FilePanel(Container):
         super().__init__(**kwargs)
         self.initial_path = Path(initial_path)
         self.current_dir = self.initial_path
-        self._tree: Optional[DirectoryTree] = None
+        self._tree: Optional[MultiSelectDirectoryTree] = None
     
     def compose(self):
         """Compose the file panel layout."""
         with Vertical():
             yield Static(str(self.current_dir), classes="panel-header")
-            yield DirectoryTree(str(self.current_dir))
+            yield MultiSelectDirectoryTree(str(self.current_dir))
     
     def on_mount(self) -> None:
         """Handle mounting of the widget."""
-        self._tree = self.query_one(DirectoryTree)
+        self._tree = self.query_one(MultiSelectDirectoryTree)
         self._update_header()
     
     def on_directory_tree_directory_selected(self, event: DirectoryTree.DirectorySelected) -> None:
@@ -67,16 +69,31 @@ class FilePanel(Container):
     
     def get_selected_path(self) -> Optional[Path]:
         """
-        Get the currently selected file or directory path.
+        Get the currently focused file or directory path (cursor).
         
         Returns:
-            Path object of selected item, or None if nothing selected
+            Path object of focused item, or None if nothing focused
         """
         if self._tree and self._tree.cursor_node:
             node = self._tree.cursor_node
             if node.data and hasattr(node.data, 'path'):
                 return Path(node.data.path)
         return None
+
+    def get_selected_paths(self) -> List[Path]:
+        """
+        Get the list of selected paths.
+        If no explicit selection, returns a list containing the focused item.
+        """
+        if self._tree:
+            if self._tree.selected_paths:
+                return list(self._tree.selected_paths)
+
+            # Fallback to cursor
+            cursor_path = self.get_selected_path()
+            if cursor_path:
+                return [cursor_path]
+        return []
     
     def refresh_view(self) -> None:
         """Refresh the directory tree view."""
@@ -101,4 +118,6 @@ class FilePanel(Container):
             if self._tree:
                 self._tree.path = str(path)
                 self._tree.reload()
+                self._tree.styles.opacity = 0.0
+                self._tree.animate("opacity", 1.0, duration=0.2)
             self._update_header()

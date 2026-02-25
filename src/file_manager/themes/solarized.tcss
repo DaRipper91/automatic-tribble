@@ -1,0 +1,13 @@
+/* Solarized Dark Theme */
+$surface: #073642;
+$background: #002b36;
+$panel: #073642;
+$boost: #586e75;
+$primary: #268bd2;
+$secondary: #657b83;
+$accent: #2aa198;
+$text: #839496;
+$text-muted: #586e75;
+$success: #859900;
+$warning: #b58900;
+$error: #dc322f;

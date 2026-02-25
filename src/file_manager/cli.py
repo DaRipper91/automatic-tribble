@@ -79,6 +79,7 @@ def setup_parser():
     # Config command
     config = subparsers.add_parser('config', help='Manage configuration')
     config.add_argument('--edit', action='store_true', help='Edit configuration file')
+    config.add_argument('--theme', help='Set the UI theme (dark, light, solarized, dracula)')
     
     return parser
 
@@ -293,6 +294,16 @@ async def handle_redo(args):
 
 async def handle_config(args):
     config_manager = ConfigManager()
+
+    if args.theme:
+        themes = ["dark", "light", "solarized", "dracula"]
+        if args.theme not in themes:
+            console.print(f"[bold red]Error:[/bold red] Theme must be one of {themes}")
+            return 1
+        config_manager.set_theme(args.theme)
+        console.print(f"Theme set to [bold green]{args.theme}[/bold green]")
+        return 0
+
     config_path = config_manager.get_config_path()
 
     if args.edit:
