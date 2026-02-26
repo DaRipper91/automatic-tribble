@@ -2,12 +2,15 @@
 Screens for the file manager application.
 """
 
+import subprocess
+import shlex
 from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen, Screen
 from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar
 from textual.containers import Container, Horizontal, Vertical
 from textual.binding import Binding
+from textual import work
 
 from .ai_utils import AIExecutor
 
@@ -295,44 +298,64 @@ class AIConfigScreen(Screen):
         # Show processing
         log.write_line("[yellow]Processing...[/]")
 
+        # Start background worker to avoid blocking UI
+        self._process_input_worker(user_input)
+
+    @work(thread=True)
+    def _process_input_worker(self, user_input: str) -> None:
+        """Process the user input in a background thread."""
         # Determine intent (command vs general query)
         # For now, assume command generation unless it looks like a question
         command, status = self.ai.generate_automation_command(user_input)
 
         if command:
-            log.write_line(f"[bold green]Generated Command:[/] {command}")
-            log.write_line(f"[italic]{status}[/]")
+            self.app.call_from_thread(self._safe_log, f"[bold green]Generated Command:[/] {command}")
+            self.app.call_from_thread(self._safe_log, f"[italic]{status}[/]")
 
             # Ask for confirmation to run
             def check_confirm(confirmed: Optional[bool]) -> None:
                 if confirmed:
-                    log.write_line("[yellow]Executing command...[/]")
-                    # Execute the command locally
-                    import subprocess
-                    import shlex
-                    try:
-                        args = shlex.split(command)
-                        result = subprocess.run(args, capture_output=True, text=True)
-                        if result.stdout:
-                            log.write_line(result.stdout)
-                        if result.stderr:
-                            log.write_line(f"[red]{result.stderr}[/]")
-                        log.write_line("[green]Command execution finished.[/]")
-                    except Exception as e:
-                        log.write_line(f"[red]Execution failed: {e}[/]")
+                    self._execute_command_worker(command)
                 else:
-                    log.write_line("[yellow]Command cancelled.[/]")
+                    self._safe_log("[yellow]Command cancelled.[/]")
 
-            self.app.push_screen(
+            self.app.call_from_thread(
+                self.app.push_screen,
                 ConfirmationScreen(f"Execute command:\n{command}?", confirm_label="Execute", confirm_variant="success"),
                 check_confirm
             )
         else:
-            log.write_line(f"[red]Could not generate command:[/] {status}")
+            self.app.call_from_thread(self._safe_log, f"[red]Could not generate command:[/] {status}")
             # Fallback to generic AI response
-            log.write_line("[yellow]Asking Gemini directly...[/]")
+            self.app.call_from_thread(self._safe_log, "[yellow]Asking Gemini directly...[/]")
             response = self.ai.execute_prompt(user_input)
-            log.write_line(f"[bold magenta]Gemini:[/] {response}")
+            self.app.call_from_thread(self._safe_log, f"[bold magenta]Gemini:[/] {response}")
+
+    @work(thread=True)
+    def _execute_command_worker(self, command: str) -> None:
+        """Execute the command in a background thread."""
+        self.app.call_from_thread(self._safe_log, "[yellow]Executing command...[/]")
+
+        try:
+            args = shlex.split(command)
+            result = subprocess.run(args, capture_output=True, text=True)
+            if result.stdout:
+                self.app.call_from_thread(self._safe_log, result.stdout)
+            if result.stderr:
+                self.app.call_from_thread(self._safe_log, f"[red]{result.stderr}[/]")
+            self.app.call_from_thread(self._safe_log, "[green]Command execution finished.[/]")
+        except Exception as e:
+            self.app.call_from_thread(self._safe_log, f"[red]Execution failed: {e}[/]")
+
+    def _safe_log(self, message: str) -> None:
+        """Log a message to the output log safely."""
+        try:
+            if not self.app or not self.is_mounted:
+                return
+            log = self.query_one(Log)
+            log.write_line(message)
+        except Exception:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         input_widget = self.query_one(Input)
