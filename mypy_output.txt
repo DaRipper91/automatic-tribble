@@ -1,0 +1,16 @@
+src/file_manager/context.py:97: error: Incompatible types in assignment (expression has type "float", variable has type "int")  [assignment]
+src/file_manager/config.py:5: error: Library stubs not installed for "yaml"  [import-untyped]
+src/file_manager/config.py:5: note: Hint: "python3 -m pip install types-PyYAML"
+src/file_manager/search.py:15: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/file_manager/file_operations.py:60: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/file_manager/file_operations.py:61: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/file_manager/automation.py:35: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/file_manager/scheduler.py:12: error: Library stubs not installed for "croniter"  [import-untyped]
+src/file_manager/scheduler.py:12: note: Hint: "python3 -m pip install types-croniter"
+src/file_manager/ai_integration.py:10: error: Library stubs not installed for "jsonschema"  [import-untyped]
+src/file_manager/ai_integration.py:10: note: Hint: "python3 -m pip install types-jsonschema"
+src/file_manager/ai_integration.py:10: note: (or run "mypy --install-types" to install all missing stub packages)
+src/file_manager/ai_integration.py:10: note: See https://mypy.readthedocs.io/en/stable/running_mypy.html#missing-imports
+src/file_manager/ai_mode.py:81: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+src/file_manager/ai_mode.py:82: note: By default the bodies of untyped functions are not checked, consider using --check-untyped-defs  [annotation-unchecked]
+Found 4 errors in 4 files (checked 24 source files)

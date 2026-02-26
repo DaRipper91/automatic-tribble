@@ -18,6 +18,7 @@ try:
     from rich.console import Console
     from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
     from rich.table import Table
+    from rich.prompt import Prompt
 except ImportError:
     print("Error: 'rich' library is required. Please install it.", file=sys.stderr)
     sys.exit(1)
@@ -212,10 +213,50 @@ async def handle_duplicates(args):
             strategy = ConflictResolutionStrategy.KEEP_OLDEST
 
         if strategy == ConflictResolutionStrategy.INTERACTIVE:
-             if args.json:
-                 pass
-             else:
-                 console.print("Interactive mode not supported in CLI.")
+            if args.json:
+                print(json.dumps({"error": "Interactive mode not supported in JSON output mode"}))
+                return 1
+
+            deleted_files = []
+            for hash_val, paths in duplicates.items():
+                if len(paths) < 2:
+                    continue
+
+                console.print(f"\n[bold yellow]Duplicate Group ({len(paths)} files):[/bold yellow]")
+                for idx, path in enumerate(paths):
+                    try:
+                        size_str = FileOperations.format_size(path.stat().st_size)
+                        mtime_str = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+                    except OSError:
+                        size_str = "Unknown"
+                        mtime_str = "Unknown"
+                    console.print(f"  [{idx + 1}] {path} (Size: {size_str}, Modified: {mtime_str})")
+
+                choice = Prompt.ask(
+                    "Select file to [bold green]KEEP[/bold green] (enter number)",
+                    default="1"
+                )
+
+                try:
+                    keep_idx = int(choice) - 1
+                    if 0 <= keep_idx < len(paths):
+                        # paths[keep_idx] is kept
+                        for i, path in enumerate(paths):
+                            if i != keep_idx:
+                                try:
+                                    await organizer.file_ops.delete(path)
+                                    deleted_files.append(path)
+                                    console.print(f"  [red]Deleted:[/red] {path}")
+                                except Exception as e:
+                                    console.print(f"  [bold red]Error deleting {path}: {e}[/bold red]")
+                    else:
+                        console.print("[red]Invalid selection. Skipping group.[/red]")
+                except ValueError:
+                     console.print("[red]Invalid input. Skipping group.[/red]")
+
+            console.print(f"\n[green]Resolved duplicates. Deleted {len(deleted_files)} files.[/green]")
+            return 0
+
         else:
              deleted = await organizer.resolve_duplicates(duplicates, strategy, progress_queue)
              if args.json:
@@ -333,7 +374,7 @@ async def handle_tags(args):
         if manager.add_tag(path, tag):
             console.print(f"[green]Added tag '{tag}' to {path}[/]")
         else:
-            console.print(f"[red]Failed to add tag.[/]")
+            console.print("[red]Failed to add tag.[/]")
 
     elif args.remove:
         path = Path(args.remove[0])
@@ -341,7 +382,7 @@ async def handle_tags(args):
         if manager.remove_tag(path, tag):
              console.print(f"[green]Removed tag '{tag}' from {path}[/]")
         else:
-             console.print(f"[yellow]Tag not found.[/]")
+             console.print("[yellow]Tag not found.[/]")
 
     elif args.list:
         tags = manager.list_all_tags()

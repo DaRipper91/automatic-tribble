@@ -176,7 +176,7 @@ tfm-auto duplicates --dir ./Photos --resolve oldest
 **Resolution Strategies:**
 - `newest`: Keeps the file with the most recent modification time.
 - `oldest`: Keeps the file with the oldest modification time.
-- `interactive`: (Not currently supported in CLI) Prompts you to choose which file to keep.
+- `interactive`: Prompts you to choose which file to keep for each duplicate group.
 
 ### 5. Batch Rename
 Rename multiple files using a simple pattern match.
@@ -219,7 +219,7 @@ tfm-auto schedule --daemon
 ```
 
 ### 8. Undo / Redo
-Revert accidental changes. The history is persisted to `~/.tfm/history.pkl`.
+Revert accidental changes. The history is persisted to `~/.tfm/history.json`.
 ```bash
 # Undo the last operation
 tfm-auto --undo
@@ -241,7 +241,7 @@ tfm-auto config --edit
 
 ### 🔄 Undo/Redo System
 TFM tracks all destructive operations (Move, Copy, Delete, Rename, Create Directory).
-- **Storage**: History is saved in `~/.tfm/history.pkl`, so it persists between sessions.
+- **Storage**: History is saved in `~/.tfm/history.json`, so it persists between sessions.
 - **Limit**: The undo stack is currently unbounded (until cleared manually or by file size limits in future versions).
 - **Usage**: You can use `tfm-auto --undo` or `tfm-auto --redo` at any time.
 
