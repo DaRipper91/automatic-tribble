@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Button, Label, Input, RichLog
+from textual.widgets import Header, Footer, Button, Label, Input, RichLog, Checkbox
 from textual.screen import Screen
 from textual.binding import Binding
 from textual import work
@@ -63,6 +63,11 @@ class AIModeScreen(Screen):
     }
 
     #input-container {
+        height: auto;
+        margin-bottom: 1;
+    }
+
+    #history-container {
         height: auto;
         margin-bottom: 1;
     }
@@ -138,6 +143,9 @@ class AIModeScreen(Screen):
                     yield Button("Find Duplicates", id="btn_duplicates", classes="action-btn")
                     yield Button("Batch Rename", id="btn_rename", classes="action-btn")
 
+                    yield Label("Settings", classes="section-title")
+                    yield Checkbox("Enable Dry Run", value=True, id="chk_dry_run")
+
                 # Right Panel: Interaction
                 with Vertical(id="right-panel"):
                     yield Label("Target Directory:", classes="section-title")
@@ -211,6 +219,9 @@ class AIModeScreen(Screen):
         """Generate a plan in background."""
         self.app.call_from_thread(self._log_message, f"[dim]Thinking... Context: {target_path}[/]")
 
+        # Check dry run toggle
+        is_dry_run_enabled = self.query_one("#chk_dry_run", Checkbox).value
+
         try:
             plan_data = self.gemini_client.generate_plan(command, target_path)
             self.current_plan = plan_data.get("plan", [])
@@ -225,31 +236,40 @@ class AIModeScreen(Screen):
                 icon = "🗑️" if step.get("is_destructive") else "📝"
                 msg += f"{step['step']}. {icon} [bold]{step['action']}[/]: {step['description']}\n"
 
-            # Dry Run Simulation
-            msg += "\n[bold cyan]Dry Run Simulation:[/bold cyan]\n"
-            for step in self.current_plan:
-                 # Running dry run for each step to get prediction
-                 try:
-                     res = asyncio.run(self.gemini_client.execute_plan_step(step, dry_run=True))
-                     if "delete" in res.lower() or "remove" in res.lower():
-                         color = "red"
-                     elif "move" in res.lower() or "rename" in res.lower() or "organize" in res.lower():
-                         color = "yellow"
-                     else:
-                         color = "green"
-                     msg += f"  Step {step['step']}: [{color}]{res}[/{color}]\n"
-                 except Exception as e:
-                     msg += f"  Step {step['step']}: [red]Simulation failed: {e}[/]\n"
-
             self.app.call_from_thread(self._log_message, msg)
 
-            # Trigger confirmation flow
-            self.app.call_from_thread(self._request_confirmation, command)
+            if is_dry_run_enabled:
+                # Dry Run Simulation
+                dry_msg = "\n[bold cyan]Dry Run Simulation (Safety Check):[/bold cyan]\n"
+                for step in self.current_plan:
+                     # Running dry run for each step to get prediction
+                     try:
+                         res = asyncio.run(self.gemini_client.execute_plan_step(step, dry_run=True))
+                         if "delete" in res.lower() or "remove" in res.lower():
+                             color = "red"
+                         elif "move" in res.lower() or "rename" in res.lower() or "organize" in res.lower():
+                             color = "yellow"
+                         elif "add" in res.lower() or "create" in res.lower():
+                             color = "green"
+                         else:
+                             color = "white"
+                         dry_msg += f"  Step {step['step']}: [{color}]{res}[/{color}]\n"
+                     except Exception as e:
+                         dry_msg += f"  Step {step['step']}: [red]Simulation failed: {e}[/]\n"
+
+                self.app.call_from_thread(self._log_message, dry_msg)
+
+                # Trigger confirmation flow
+                self.app.call_from_thread(self._request_confirmation, command, "Confirm Execution")
+            else:
+                # Direct confirmation if dry run disabled (still ask, but warn)
+                self.app.call_from_thread(self._log_message, "[bold red]Warning: Dry Run is disabled.[/]")
+                self.app.call_from_thread(self._request_confirmation, command, "Execute Immediately?")
 
         except Exception as e:
              self.app.call_from_thread(self._log_message, f"[bold red]Error generating plan:[/bold red] {e}")
 
-    def _request_confirmation(self, command: str) -> None:
+    def _request_confirmation(self, command: str, title: str) -> None:
         """Ask user to confirm execution."""
         def check_confirm(confirmed: Optional[bool]) -> None:
             if confirmed:
@@ -261,8 +281,8 @@ class AIModeScreen(Screen):
 
         self.app.push_screen(
             ConfirmationScreen(
-                "Execute this plan?",
-                confirm_label="Confirm & Execute",
+                title,
+                confirm_label="Yes, Execute",
                 confirm_variant="success"
             ),
             check_confirm

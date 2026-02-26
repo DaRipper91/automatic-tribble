@@ -14,57 +14,16 @@ from .automation import FileOrganizer
 from .context import DirectoryContextBuilder
 from .ai_utils import AIExecutor
 from .tags import TagManager
+from .ai_schema import PLAN_SCHEMA, TAGS_SCHEMA, SEMANTIC_SEARCH_SCHEMA
 
 logger = logging.getLogger(__name__)
 
 class ResponseValidator:
     """Validates AI responses against JSON schemas."""
 
-    PLAN_SCHEMA = {
-        "type": "object",
-        "properties": {
-            "plan": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "step": {"type": "integer"},
-                        "action": {"type": "string"},
-                        "params": {"type": "object"},
-                        "description": {"type": "string"},
-                        "is_destructive": {"type": "boolean"}
-                    },
-                    "required": ["step", "action", "params", "description"]
-                }
-            }
-        },
-        "required": ["plan"]
-    }
-
-    TAGS_SCHEMA = {
-        "type": "object",
-        "properties": {
-            "suggestions": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "file": {"type": "string"},
-                        "tags": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        }
-                    },
-                    "required": ["file", "tags"]
-                }
-            }
-        },
-        "required": ["suggestions"]
-    }
-
     @staticmethod
-    def validate_plan(response_text: str) -> Dict[str, Any]:
-        """Validate and parse a planning response."""
+    def _validate(response_text: str, schema: Dict[str, Any], schema_name: str) -> Dict[str, Any]:
+        """Generic validation helper."""
         try:
             # clean markdown code blocks
             clean_text = response_text.replace("```json", "").replace("```", "").strip()
@@ -75,28 +34,26 @@ class ResponseValidator:
                 clean_text = clean_text[start:end+1]
 
             data = json.loads(clean_text)
-            validate(instance=data, schema=ResponseValidator.PLAN_SCHEMA)
+            validate(instance=data, schema=schema)
             return data
         except (json.JSONDecodeError, ValidationError) as e:
-            raise ValueError(f"Invalid plan format: {str(e)}")
+            raise ValueError(f"Invalid {schema_name} format: {str(e)}")
+
+    @staticmethod
+    def validate_plan(response_text: str) -> Dict[str, Any]:
+        """Validate and parse a planning response."""
+        return ResponseValidator._validate(response_text, PLAN_SCHEMA, "plan")
 
     @staticmethod
     def validate_tags(response_text: str) -> Dict[str, Any]:
         """Validate and parse a tagging response."""
-        try:
-             # clean markdown code blocks
-            clean_text = response_text.replace("```json", "").replace("```", "").strip()
-            # Find the first { and last }
-            start = clean_text.find("{")
-            end = clean_text.rfind("}")
-            if start != -1 and end != -1:
-                clean_text = clean_text[start:end+1]
+        return ResponseValidator._validate(response_text, TAGS_SCHEMA, "tags")
 
-            data = json.loads(clean_text)
-            validate(instance=data, schema=ResponseValidator.TAGS_SCHEMA)
-            return data
-        except (json.JSONDecodeError, ValidationError) as e:
-            raise ValueError(f"Invalid tags format: {str(e)}")
+    @staticmethod
+    def validate_search(response_text: str) -> Dict[str, Any]:
+        """Validate and parse a semantic search response."""
+        return ResponseValidator._validate(response_text, SEMANTIC_SEARCH_SCHEMA, "search")
+
 
 class GeminiClient:
     """Client for Gemini AI integration."""
@@ -153,9 +110,9 @@ class GeminiClient:
             return ResponseValidator.validate_plan(response_text)
         except ValueError as e:
             logger.warning(f"Validation failed: {e}. Retrying with feedback.")
-            return self._retry_with_feedback(user_command, prompt, str(e))
+            return self._retry_with_feedback(user_command, prompt, str(e), ResponseValidator.validate_plan)
 
-    def _retry_with_feedback(self, original_command: str, original_prompt: str, error: str) -> Dict[str, Any]:
+    def _retry_with_feedback(self, original_command: str, original_prompt: str, error: str, validator_func) -> Dict[str, Any]:
         try:
             template = self.prompt_env.get_template("validation.jinja2")
             feedback_prompt = template.render(
@@ -167,7 +124,7 @@ class GeminiClient:
 
             if self.executor.is_available():
                 response_text = self.executor.execute_prompt(full_prompt)
-                return ResponseValidator.validate_plan(response_text)
+                return validator_func(response_text)
             else:
                  raise ValueError(f"Mock validation failed: {error}")
         except Exception as e:
@@ -329,21 +286,20 @@ class GeminiClient:
             # Fallback to keyword search locally if AI unavailable
             return [h for h in history if query.lower() in h["command"].lower()]
 
-        prompt = f"Find the most relevant commands from the history for the query: '{query}'.\nHistory:\n"
-        for i, entry in enumerate(history):
-            prompt += f"{i}. {entry['command']}\n"
-        prompt += "\nReturn JSON: {'indices': [0, 2]}"
+        if not self.prompt_env:
+            # Fallback if no templates
+            return [h for h in history if query.lower() in h["command"].lower()]
+
+        try:
+            template = self.prompt_env.get_template("semantic_search.jinja2")
+            prompt = template.render(query=query, history=history)
+        except Exception as e:
+             logger.error(f"Error rendering prompt: {e}")
+             return [h for h in history if query.lower() in h["command"].lower()]
 
         response_text = self.executor.execute_prompt(prompt)
         try:
-            # Clean response
-            clean_text = response_text.replace("```json", "").replace("```", "").strip()
-            start = clean_text.find("{")
-            end = clean_text.rfind("}")
-            if start != -1 and end != -1:
-                clean_text = clean_text[start:end+1]
-
-            data = json.loads(clean_text)
+            data = ResponseValidator.validate_search(response_text)
             indices = data.get("indices", [])
             return [history[i] for i in indices if 0 <= i < len(history)]
         except Exception:
