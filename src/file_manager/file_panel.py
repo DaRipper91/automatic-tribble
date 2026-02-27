@@ -3,10 +3,11 @@ File panel widget for displaying and navigating files.
 """
 
 from pathlib import Path
-from typing import Optional
-from textual.widgets import DirectoryTree, Static
+from typing import Optional, Set
+from textual.widgets import Static
 from textual.containers import Vertical, Container
 from textual.reactive import reactive
+from .ui_components import MultiSelectDirectoryTree
 
 
 class FilePanel(Container):
@@ -28,7 +29,7 @@ class FilePanel(Container):
         text-style: bold;
     }
     
-    FilePanel DirectoryTree {
+    FilePanel MultiSelectDirectoryTree {
         height: 1fr;
         scrollbar-gutter: stable;
     }
@@ -47,27 +48,27 @@ class FilePanel(Container):
         super().__init__(**kwargs)
         self.initial_path = Path(initial_path)
         self.current_dir = self.initial_path
-        self._tree: Optional[DirectoryTree] = None
+        self._tree: Optional[MultiSelectDirectoryTree] = None
     
     def compose(self):
         """Compose the file panel layout."""
         with Vertical():
             yield Static(str(self.current_dir), classes="panel-header")
-            yield DirectoryTree(str(self.current_dir))
+            yield MultiSelectDirectoryTree(str(self.current_dir))
     
     def on_mount(self) -> None:
         """Handle mounting of the widget."""
-        self._tree = self.query_one(DirectoryTree)
+        self._tree = self.query_one(MultiSelectDirectoryTree)
         self._update_header()
     
-    def on_directory_tree_directory_selected(self, event: DirectoryTree.DirectorySelected) -> None:
+    def on_directory_tree_directory_selected(self, event: MultiSelectDirectoryTree.DirectorySelected) -> None:
         """Handle directory selection."""
         self.current_dir = Path(event.path)
         self._update_header()
     
     def get_selected_path(self) -> Optional[Path]:
         """
-        Get the currently selected file or directory path.
+        Get the currently cursor-selected file or directory path.
         
         Returns:
             Path object of selected item, or None if nothing selected
@@ -77,6 +78,12 @@ class FilePanel(Container):
             if node.data and hasattr(node.data, 'path'):
                 return Path(node.data.path)
         return None
+
+    def get_marked_paths(self) -> Set[Path]:
+        """Get the set of multi-selected paths."""
+        if self._tree:
+            return self._tree.get_selected_paths()
+        return set()
     
     def refresh_view(self) -> None:
         """Refresh the directory tree view."""
@@ -100,5 +107,5 @@ class FilePanel(Container):
             self.current_dir = path
             if self._tree:
                 self._tree.path = str(path)
-                self._tree.reload()
+                # self._tree.reload() # DirectoryTree automatically reloads on path change usually
             self._update_header()
