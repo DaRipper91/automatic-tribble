@@ -1,0 +1,7 @@
+Find the most relevant commands from the history for the query: '{{ query }}'.
+History:
+{% for item in history %}
+{{ loop.index0 }}. {{ item.command }}
+{% endfor %}
+
+Return JSON: {'indices': [0, 2]}

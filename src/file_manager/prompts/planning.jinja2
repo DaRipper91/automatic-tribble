@@ -11,6 +11,11 @@ Directory Stats:
 - Categories: {{ directory_stats.category_counts }}
 - Oldest File: {{ directory_stats.oldest_file }}
 - Newest File: {{ directory_stats.newest_file }}
+- Top 5 Largest Files:
+{% for f in directory_stats.top_largest_files %}
+  - {{ f.name }} ({{ f.size_human }})
+{% endfor %}
+- Potential Duplicate Groups (by size): {{ directory_stats.duplicate_groups }}
 {% endif %}
 
 AVAILABLE ACTIONS:

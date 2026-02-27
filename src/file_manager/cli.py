@@ -90,12 +90,14 @@ def setup_parser():
     tags.add_argument('--list', action='store_true', help='List all tags')
     tags.add_argument('--search', metavar='TAG', help='List files with tag')
     tags.add_argument('--cleanup', action='store_true', help='Clean up missing files')
+    tags.add_argument('--export', action='store_true', help='Export all tags to JSON')
 
     # Schedule command
     schedule = subparsers.add_parser('schedule', help='Manage scheduled tasks')
     schedule.add_argument('--list', action='store_true', help='List scheduled jobs')
     schedule.add_argument('--add', nargs=4, metavar=('NAME', 'CRON', 'TYPE', 'PARAMS_JSON'), help='Add new job')
     schedule.add_argument('--remove', metavar='NAME', help='Remove job')
+    schedule.add_argument('--run-now', metavar='NAME', help='Run a scheduled job immediately')
     schedule.add_argument('--daemon', action='store_true', help='Run scheduler daemon')
     
     return parser
@@ -358,6 +360,10 @@ async def handle_tags(args):
         for f in files:
             console.print(f"  {f}")
 
+    elif args.export:
+        export_data = manager.export_tags()
+        print(json.dumps(export_data, indent=2))
+
     elif args.cleanup:
         count = manager.cleanup_missing_files()
         console.print(f"Removed {count} missing files from database.")
@@ -404,6 +410,12 @@ async def handle_schedule(args):
             console.print(f"[green]Job '{args.remove}' removed.[/]")
         else:
             console.print(f"[yellow]Job '{args.remove}' not found.[/]")
+
+    elif args.run_now:
+        if await scheduler.run_job_now(args.run_now):
+            console.print(f"[green]Job '{args.run_now}' executed successfully.[/]")
+        else:
+            console.print(f"[yellow]Job '{args.run_now}' not found.[/]")
 
     return 0
 

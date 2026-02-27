@@ -14,53 +14,12 @@ from .automation import FileOrganizer
 from .context import DirectoryContextBuilder
 from .ai_utils import AIExecutor
 from .tags import TagManager
+from .ai_schema import PLAN_SCHEMA, TAGS_SCHEMA
 
 logger = logging.getLogger(__name__)
 
 class ResponseValidator:
     """Validates AI responses against JSON schemas."""
-
-    PLAN_SCHEMA = {
-        "type": "object",
-        "properties": {
-            "plan": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "step": {"type": "integer"},
-                        "action": {"type": "string"},
-                        "params": {"type": "object"},
-                        "description": {"type": "string"},
-                        "is_destructive": {"type": "boolean"}
-                    },
-                    "required": ["step", "action", "params", "description"]
-                }
-            }
-        },
-        "required": ["plan"]
-    }
-
-    TAGS_SCHEMA = {
-        "type": "object",
-        "properties": {
-            "suggestions": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "file": {"type": "string"},
-                        "tags": {
-                            "type": "array",
-                            "items": {"type": "string"}
-                        }
-                    },
-                    "required": ["file", "tags"]
-                }
-            }
-        },
-        "required": ["suggestions"]
-    }
 
     @staticmethod
     def validate_plan(response_text: str) -> Dict[str, Any]:
@@ -75,7 +34,7 @@ class ResponseValidator:
                 clean_text = clean_text[start:end+1]
 
             data = json.loads(clean_text)
-            validate(instance=data, schema=ResponseValidator.PLAN_SCHEMA)
+            validate(instance=data, schema=PLAN_SCHEMA)
             return data
         except (json.JSONDecodeError, ValidationError) as e:
             raise ValueError(f"Invalid plan format: {str(e)}")
@@ -93,7 +52,7 @@ class ResponseValidator:
                 clean_text = clean_text[start:end+1]
 
             data = json.loads(clean_text)
-            validate(instance=data, schema=ResponseValidator.TAGS_SCHEMA)
+            validate(instance=data, schema=TAGS_SCHEMA)
             return data
         except (json.JSONDecodeError, ValidationError) as e:
             raise ValueError(f"Invalid tags format: {str(e)}")
@@ -148,31 +107,49 @@ class GeminiClient:
             logger.warning("Gemini CLI not available. Using mock response.")
             return json.loads(self._mock_response(user_command, current_dir))
 
-        # Validate
-        try:
-            return ResponseValidator.validate_plan(response_text)
-        except ValueError as e:
-            logger.warning(f"Validation failed: {e}. Retrying with feedback.")
-            return self._retry_with_feedback(user_command, prompt, str(e))
+        # Validate with Retry
+        max_retries = 3
+        current_prompt = prompt
 
-    def _retry_with_feedback(self, original_command: str, original_prompt: str, error: str) -> Dict[str, Any]:
+        for attempt in range(max_retries + 1):
+             try:
+                 if attempt > 0:
+                     # This is a retry. Execute the amended prompt.
+                     if self.executor.is_available():
+                        response_text = self.executor.execute_prompt(current_prompt)
+                     else:
+                        raise ValueError("Executor unavailable for retry.")
+
+                 return ResponseValidator.validate_plan(response_text)
+
+             except ValueError as e:
+                 logger.warning(f"Validation failed (Attempt {attempt+1}/{max_retries + 1}): {e}")
+                 if attempt < max_retries:
+                     # Prepare retry prompt
+                     current_prompt = self._build_retry_prompt(user_command, prompt, str(e))
+                 else:
+                     # Give up
+                     logger.error("Max retries reached. Plan generation failed.")
+                     raise
+
+        return {"plan": []}
+
+    def _build_retry_prompt(self, original_command: str, original_prompt: str, error: str) -> str:
+        """Construct the retry prompt with feedback."""
         try:
             template = self.prompt_env.get_template("validation.jinja2")
             feedback_prompt = template.render(
                 validation_error=error,
                 user_command=original_command
             )
-
-            full_prompt = f"{original_prompt}\n\n{feedback_prompt}"
-
-            if self.executor.is_available():
-                response_text = self.executor.execute_prompt(full_prompt)
-                return ResponseValidator.validate_plan(response_text)
-            else:
-                 raise ValueError(f"Mock validation failed: {error}")
+            return f"{original_prompt}\n\n{feedback_prompt}"
         except Exception as e:
-            logger.error(f"Retry failed: {e}")
-            raise ValueError(f"AI Plan Generation Failed: {e}")
+            logger.error(f"Error building retry prompt: {e}")
+            return original_prompt
+
+    def _retry_with_feedback(self, original_command: str, original_prompt: str, error: str) -> Dict[str, Any]:
+        # Deprecated: Merged into generate_plan logic
+        return self.generate_plan(original_command, Path.cwd())
 
     def _mock_response(self, command: str, current_dir: Path) -> str:
         """Generate a mock JSON response for testing."""
@@ -325,14 +302,16 @@ class GeminiClient:
 
     def search_history(self, query: str, history: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Search history using AI."""
-        if not self.executor.is_available():
+        if not self.executor.is_available() or not self.prompt_env:
             # Fallback to keyword search locally if AI unavailable
             return [h for h in history if query.lower() in h["command"].lower()]
 
-        prompt = f"Find the most relevant commands from the history for the query: '{query}'.\nHistory:\n"
-        for i, entry in enumerate(history):
-            prompt += f"{i}. {entry['command']}\n"
-        prompt += "\nReturn JSON: {'indices': [0, 2]}"
+        try:
+            template = self.prompt_env.get_template("semantic_search.jinja2")
+            prompt = template.render(query=query, history=history)
+        except Exception as e:
+            logger.error(f"Error rendering prompt: {e}")
+            return [h for h in history if query.lower() in h["command"].lower()]
 
         response_text = self.executor.execute_prompt(prompt)
         try:

@@ -4,8 +4,9 @@ Directory Context Builder for AI Prompts.
 
 import os
 import time
+import heapq
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass, asdict
 
 @dataclass
@@ -16,6 +17,8 @@ class DirectoryStats:
     category_counts: Dict[str, int]
     oldest_file: str
     newest_file: str
+    top_largest_files: List[Dict[str, Any]]
+    duplicate_groups: int
 
 class DirectoryContextBuilder:
     """Builds and caches directory statistics for AI context."""
@@ -58,6 +61,12 @@ class DirectoryContextBuilder:
         oldest_name = "None"
         newest_name = "None"
 
+        # Heap for top 5 largest files: stores (size, name)
+        largest_files_heap: List[Tuple[int, str]] = []
+
+        # Simple duplicate detection based on size
+        size_map: Dict[int, int] = {}
+
         try:
             for entry in os.scandir(directory):
                 if entry.is_file():
@@ -78,8 +87,27 @@ class DirectoryContextBuilder:
                         newest_ts = mtime
                         newest_name = entry.name
 
+                    # Track largest files
+                    if len(largest_files_heap) < 5:
+                        heapq.heappush(largest_files_heap, (size, entry.name))
+                    else:
+                        heapq.heappushpop(largest_files_heap, (size, entry.name))
+
+                    # Track potential duplicates by size
+                    size_map[size] = size_map.get(size, 0) + 1
+
         except (PermissionError, OSError):
             pass
+
+        # Sort largest files descending
+        largest_files = sorted(largest_files_heap, key=lambda x: x[0], reverse=True)
+        formatted_largest = [
+            {"name": name, "size_human": self._human_size(size)}
+            for size, name in largest_files
+        ]
+
+        # Estimate duplicate groups (files with same size > 1)
+        duplicate_groups = sum(1 for count in size_map.values() if count > 1)
 
         return DirectoryStats(
             total_files=total_files,
@@ -87,7 +115,9 @@ class DirectoryContextBuilder:
             total_size_human=self._human_size(total_size),
             category_counts=categories,
             oldest_file=oldest_name,
-            newest_file=newest_name
+            newest_file=newest_name,
+            top_largest_files=formatted_largest,
+            duplicate_groups=duplicate_groups
         )
 
     def _human_size(self, size: int) -> str:

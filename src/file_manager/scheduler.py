@@ -119,6 +119,17 @@ class TaskScheduler:
                 job["last_run"] = now.timestamp()
                 self._save_jobs()
 
+    async def run_job_now(self, name: str) -> bool:
+        """Execute a job immediately by name."""
+        for job in self.jobs:
+            if job["name"] == name:
+                logger.info(f"Manually running job: {name}")
+                await self._execute_job(job)
+                job["last_run"] = datetime.now().timestamp()
+                self._save_jobs()
+                return True
+        return False
+
     async def _execute_job(self, job: Dict[str, Any]):
         """Execute a single job."""
         task_type = job["type"]
@@ -150,7 +161,10 @@ class TaskScheduler:
         """Run the scheduler loop."""
         logger.info("Scheduler daemon started.")
         while True:
-            await self.run_pending()
+            try:
+                await self.run_pending()
+            except Exception as e:
+                logger.error(f"Scheduler loop error: {e}")
             await asyncio.sleep(60)
 
 if __name__ == "__main__":
