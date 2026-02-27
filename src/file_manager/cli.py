@@ -28,6 +28,7 @@ from .file_operations import FileOperations
 from .config import ConfigManager
 from .tags import TagManager
 from .scheduler import TaskScheduler
+from .exceptions import TFMPathNotFoundError, TFMOperationConflictError, TFMPermissionError
 
 console = Console()
 
@@ -333,7 +334,7 @@ async def handle_tags(args):
         if manager.add_tag(path, tag):
             console.print(f"[green]Added tag '{tag}' to {path}[/]")
         else:
-            console.print(f"[red]Failed to add tag.[/]")
+            console.print("[red]Failed to add tag.[/]")
 
     elif args.remove:
         path = Path(args.remove[0])
@@ -341,7 +342,7 @@ async def handle_tags(args):
         if manager.remove_tag(path, tag):
              console.print(f"[green]Removed tag '{tag}' from {path}[/]")
         else:
-             console.print(f"[yellow]Tag not found.[/]")
+             console.print("[yellow]Tag not found.[/]")
 
     elif args.list:
         tags = manager.list_all_tags()
@@ -437,11 +438,18 @@ async def main_async():
     if handler:
         try:
             return await handler(args)
+        except (TFMPathNotFoundError, TFMOperationConflictError, TFMPermissionError) as e:
+             if args.json:
+                 print(json.dumps({"error": str(e), "type": e.__class__.__name__}))
+             else:
+                 console.print(f"[bold red]Error ({e.__class__.__name__}):[/bold red] {str(e)}")
+             return 1
         except Exception as e:
             if args.json:
-                 print(json.dumps({"error": str(e)}))
+                 print(json.dumps({"error": str(e), "type": "UnhandledException"}))
             else:
                  console.print(f"[bold red]Error:[/bold red] {str(e)}")
+                 console.print_exception()
             return 1
     else:
         return 1

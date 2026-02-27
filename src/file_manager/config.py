@@ -45,7 +45,7 @@ class ConfigManager:
     def load_categories(self) -> Dict[str, List[str]]:
         """
         Load file categories from configuration file.
-        Falls back to defaults if file doesn't exist or is invalid.
+        Merges user config with defaults.
         """
         if not self.categories_file.exists():
             # Create default file if it doesn't exist so user can edit it
@@ -54,12 +54,17 @@ class ConfigManager:
 
         try:
             with open(self.categories_file, 'r') as f:
-                categories = yaml.safe_load(f)
+                user_categories = yaml.safe_load(f)
 
-            if not isinstance(categories, dict):
+            if not isinstance(user_categories, dict):
                 logger.warning("Invalid categories config format. Using defaults.")
                 return DEFAULT_CATEGORIES
 
+            # Merge with defaults (user overrides default keys, keeps new keys)
+            # Actually, standard behavior for categories usually is strict override or union?
+            # Let's assume union: we start with defaults, update with user
+            categories = DEFAULT_CATEGORIES.copy()
+            categories.update(user_categories)
             return categories
 
         except (yaml.YAMLError, OSError) as e:

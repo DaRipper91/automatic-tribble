@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 from pathlib import Path
 from src.file_manager.ai_integration import GeminiClient
 

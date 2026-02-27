@@ -219,7 +219,7 @@ tfm-auto schedule --daemon
 ```
 
 ### 8. Undo / Redo
-Revert accidental changes. The history is persisted to `~/.tfm/history.pkl`.
+Revert accidental changes. The history is persisted to `~/.tfm/history.json`.
 ```bash
 # Undo the last operation
 tfm-auto --undo
@@ -241,7 +241,7 @@ tfm-auto config --edit
 
 ### 🔄 Undo/Redo System
 TFM tracks all destructive operations (Move, Copy, Delete, Rename, Create Directory).
-- **Storage**: History is saved in `~/.tfm/history.pkl`, so it persists between sessions.
+- **Storage**: History is saved in `~/.tfm/history.json`, so it persists between sessions.
 - **Limit**: The undo stack is currently unbounded (until cleared manually or by file size limits in future versions).
 - **Usage**: You can use `tfm-auto --undo` or `tfm-auto --redo` at any time.
 
@@ -254,13 +254,14 @@ Extend functionality by adding Python scripts to `~/.tfm/plugins/`.
     ```
 2.  **Create a plugin file** (e.g., `my_plugin.py`):
     ```python
-    from src.file_manager.plugins import TFMPlugin
+    from src.file_manager.plugins.base import TFMPlugin
+    from pathlib import Path
 
     class MyPlugin(TFMPlugin):
-        def on_file_added(self, path):
+        def on_file_added(self, path: Path):
             print(f"Plugin: File added at {path}")
 
-        def on_file_deleted(self, path):
+        def on_file_deleted(self, path: Path):
             print(f"Plugin: File deleted at {path}")
     ```
 3.  **Restart TFM**: The plugin will be automatically loaded.
