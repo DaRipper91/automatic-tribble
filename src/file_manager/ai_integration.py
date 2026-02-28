@@ -30,11 +30,13 @@ class ResponseValidator:
                     "properties": {
                         "step": {"type": "integer"},
                         "action": {"type": "string"},
-                        "params": {"type": "object"},
+                        "source": {"type": "string"},
+                        "target": {"type": "string"},
+                        "directory": {"type": "string"},
                         "description": {"type": "string"},
                         "is_destructive": {"type": "boolean"}
                     },
-                    "required": ["step", "action", "params", "description"]
+                    "required": ["step", "action", "description"]
                 }
             }
         },
@@ -140,39 +142,48 @@ class GeminiClient:
             logger.error(f"Error rendering prompt: {e}")
             return json.loads(self._mock_response(user_command, current_dir))
 
-        # Call AI
-        if self.executor.is_available():
-            response_text = self.executor.execute_prompt(prompt)
-        else:
-            # Fallback/Mock for testing environment
-            logger.warning("Gemini CLI not available. Using mock response.")
-            return json.loads(self._mock_response(user_command, current_dir))
+        current_prompt = prompt
+        last_error = ""
+        last_response_text = ""
 
-        # Validate
-        try:
-            return ResponseValidator.validate_plan(response_text)
-        except ValueError as e:
-            logger.warning(f"Validation failed: {e}. Retrying with feedback.")
-            return self._retry_with_feedback(user_command, prompt, str(e))
+        for attempt in range(3):
+            # Call AI
+            if self.executor.is_available():
+                response_text = self.executor.execute_prompt(current_prompt)
+                last_response_text = response_text
+            else:
+                # Fallback/Mock for testing environment
+                logger.warning("Gemini CLI not available. Using mock response.")
+                return json.loads(self._mock_response(user_command, current_dir))
+
+            # Validate
+            try:
+                return ResponseValidator.validate_plan(response_text)
+            except ValueError as e:
+                last_error = str(e)
+                logger.warning(f"Validation failed (Attempt {attempt + 1}/3): {e}. Retrying with feedback.")
+
+                # Update current_prompt for next attempt using _retry_with_feedback mechanism
+                try:
+                    template = self.prompt_env.get_template("validation.jinja2")
+                    feedback_prompt = template.render(
+                        validation_error=last_error,
+                        user_command=user_command
+                    )
+                    current_prompt = f"{prompt}\n\n{feedback_prompt}"
+                except Exception as template_err:
+                    logger.error(f"Failed to render validation prompt: {template_err}")
+                    break
+
+        logger.error(f"AI Plan Generation Failed after 3 attempts. Last error: {last_error}")
+        return {
+            "plan": [],
+            "fallback_text": last_response_text
+        }
 
     def _retry_with_feedback(self, original_command: str, original_prompt: str, error: str) -> Dict[str, Any]:
-        try:
-            template = self.prompt_env.get_template("validation.jinja2")
-            feedback_prompt = template.render(
-                validation_error=error,
-                user_command=original_command
-            )
-
-            full_prompt = f"{original_prompt}\n\n{feedback_prompt}"
-
-            if self.executor.is_available():
-                response_text = self.executor.execute_prompt(full_prompt)
-                return ResponseValidator.validate_plan(response_text)
-            else:
-                 raise ValueError(f"Mock validation failed: {error}")
-        except Exception as e:
-            logger.error(f"Retry failed: {e}")
-            raise ValueError(f"AI Plan Generation Failed: {e}")
+        # Deprecated: Now handled directly in generate_plan loop
+        pass
 
     def _mock_response(self, command: str, current_dir: Path) -> str:
         """Generate a mock JSON response for testing."""
@@ -184,7 +195,9 @@ class GeminiClient:
                 plan.append({
                     "step": 1,
                     "action": "organize_by_date",
-                    "params": {"source": str(current_dir), "target": str(current_dir / "Organized_Date"), "move": True},
+                    "source": str(current_dir),
+                    "target": str(current_dir / "Organized_Date"),
+                    "move": True,
                     "description": "Organize files by date.",
                     "is_destructive": False
                 })
@@ -192,7 +205,9 @@ class GeminiClient:
                  plan.append({
                     "step": 1,
                     "action": "organize_by_type",
-                    "params": {"source": str(current_dir), "target": str(current_dir / "Organized_Type"), "move": True},
+                    "source": str(current_dir),
+                    "target": str(current_dir / "Organized_Type"),
+                    "move": True,
                     "description": "Organize files by type.",
                     "is_destructive": False
                 })
@@ -201,7 +216,10 @@ class GeminiClient:
              plan.append({
                     "step": 1,
                     "action": "cleanup_old_files",
-                    "params": {"directory": str(current_dir), "days": 30, "recursive": False, "dry_run": True},
+                    "directory": str(current_dir),
+                    "days": 30,
+                    "recursive": False,
+                    "dry_run": True,
                     "description": "Clean up old files (Dry Run).",
                     "is_destructive": True
                 })
@@ -210,7 +228,10 @@ class GeminiClient:
              plan.append({
                     "step": 1,
                     "action": "batch_rename",
-                    "params": {"directory": str(current_dir), "pattern": "IMG", "replacement": "image", "recursive": False},
+                    "directory": str(current_dir),
+                    "pattern": "IMG",
+                    "replacement": "image",
+                    "recursive": False,
                     "description": "Batch rename IMG to image.",
                     "is_destructive": False
              })
@@ -219,7 +240,8 @@ class GeminiClient:
              plan.append({
                     "step": 1,
                     "action": "find_duplicates",
-                    "params": {"directory": str(current_dir), "recursive": False},
+                    "directory": str(current_dir),
+                    "recursive": False,
                     "description": "Find duplicate files.",
                     "is_destructive": False
                 })
@@ -231,58 +253,71 @@ class GeminiClient:
         Execute a single step from the plan.
         """
         action = step.get("action")
-        params = step.get("params", {})
 
         try:
             if action == "organize_by_type":
+                if "source" not in step or "target" not in step:
+                    return "Error: Missing source or target for organize_by_type."
                 result = await self.organizer.organize_by_type(
-                    Path(params["source"]), Path(params["target"]), move=params.get("move", True), dry_run=dry_run
+                    Path(step["source"]), Path(step["target"]), move=step.get("move", True), dry_run=dry_run
                 )
                 count = sum(len(files) for files in result.values())
                 action_str = "Would organize" if dry_run else "Organized"
                 return f"{action_str} {count} files by type."
 
             elif action == "organize_by_date":
+                if "source" not in step or "target" not in step:
+                    return "Error: Missing source or target for organize_by_date."
                 result = await self.organizer.organize_by_date(
-                     Path(params["source"]), Path(params["target"]), move=params.get("move", True), dry_run=dry_run
+                     Path(step["source"]), Path(step["target"]), move=step.get("move", True), dry_run=dry_run
                 )
                 count = sum(len(files) for files in result.values())
                 action_str = "Would organize" if dry_run else "Organized"
                 return f"{action_str} {count} files by date."
 
             elif action == "cleanup_old_files":
-                is_dry = dry_run or params.get("dry_run", False)
+                if "directory" not in step:
+                    return "Error: Missing directory for cleanup_old_files."
+                is_dry = dry_run or step.get("dry_run", False)
                 deleted = await self.organizer.cleanup_old_files(
-                    Path(params["directory"]), params.get("days", 30), params.get("recursive", False), is_dry
+                    Path(step["directory"]), step.get("days", 30), step.get("recursive", False), is_dry
                 )
                 prefix = "Would delete" if is_dry else "Deleted"
                 return f"{prefix} {len(deleted)} files."
 
             elif action == "find_duplicates":
+                if "directory" not in step:
+                    return "Error: Missing directory for find_duplicates."
                 duplicates = await self.organizer.find_duplicates(
-                    Path(params["directory"]), params.get("recursive", False)
+                    Path(step["directory"]), step.get("recursive", False)
                 )
                 count = sum(len(files) for files in duplicates.values())
                 return f"Found {len(duplicates)} duplicate groups ({count} files)."
 
             elif action == "batch_rename":
+                 if "directory" not in step or "pattern" not in step or "replacement" not in step:
+                     return "Error: Missing required parameters for batch_rename."
                  renamed = await self.organizer.batch_rename(
-                     Path(params["directory"]), params["pattern"], params["replacement"], params.get("recursive", False), dry_run=dry_run
+                     Path(step["directory"]), step["pattern"], step["replacement"], step.get("recursive", False), dry_run=dry_run
                  )
                  action_str = "Would rename" if dry_run else "Renamed"
                  return f"{action_str} {len(renamed)} files."
 
             elif action == "add_tag":
-                file_path = Path(params["file"])
-                tag = params["tag"]
+                if "file" not in step or "tag" not in step:
+                    return "Error: Missing file or tag for add_tag."
+                file_path = Path(step["file"])
+                tag = step["tag"]
                 if not dry_run:
                     self.tag_manager.add_tag(file_path, tag)
                 prefix = "Would add" if dry_run else "Added"
                 return f"{prefix} tag '{tag}' to {file_path.name}."
 
             elif action == "remove_tag":
-                file_path = Path(params["file"])
-                tag = params["tag"]
+                if "file" not in step or "tag" not in step:
+                    return "Error: Missing file or tag for remove_tag."
+                file_path = Path(step["file"])
+                tag = step["tag"]
                 if not dry_run:
                     self.tag_manager.remove_tag(file_path, tag)
                 prefix = "Would remove" if dry_run else "Removed"

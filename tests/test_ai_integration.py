@@ -42,11 +42,9 @@ class TestGeminiClient(unittest.IsolatedAsyncioTestCase):
         step = {
             "step": 1,
             "action": "organize_by_type",
-            "params": {
-                "source": "/tmp/src",
-                "target": "/tmp/dst",
-                "move": True
-            },
+            "source": "/tmp/src",
+            "target": "/tmp/dst",
+            "move": True,
             "description": "desc",
             "is_destructive": False
         }
