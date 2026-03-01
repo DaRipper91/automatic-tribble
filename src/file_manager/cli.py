@@ -82,7 +82,6 @@ def setup_parser():
     # Config command
     config = subparsers.add_parser('config', help='Manage configuration')
     config.add_argument('--edit', action='store_true', help='Edit configuration file')
-    config.add_argument('--theme', help='Set the application theme (dark, light, solarized, dracula)')
 
     # Tags command
     tags = subparsers.add_parser('tags', help='Manage file tags')
@@ -91,15 +90,15 @@ def setup_parser():
     tags.add_argument('--list', action='store_true', help='List all tags')
     tags.add_argument('--search', metavar='TAG', help='List files with tag')
     tags.add_argument('--cleanup', action='store_true', help='Clean up missing files')
-    tags.add_argument('--export', action='store_true', help='Export all tags to JSON')
+    tags.add_argument('--export', action='store_true', help='Export all tags')
 
     # Schedule command
     schedule = subparsers.add_parser('schedule', help='Manage scheduled tasks')
     schedule.add_argument('--list', action='store_true', help='List scheduled jobs')
     schedule.add_argument('--add', nargs=4, metavar=('NAME', 'CRON', 'TYPE', 'PARAMS_JSON'), help='Add new job')
     schedule.add_argument('--remove', metavar='NAME', help='Remove job')
-    schedule.add_argument('--run-now', metavar='NAME', help='Run a scheduled job immediately')
     schedule.add_argument('--daemon', action='store_true', help='Run scheduler daemon')
+    schedule.add_argument('--run-now', metavar='NAME', help='Run a scheduled job immediately')
     
     return parser
 
@@ -314,16 +313,6 @@ async def handle_redo(args):
 
 async def handle_config(args):
     config_manager = ConfigManager()
-
-    if args.theme:
-        themes = ['dark', 'light', 'solarized', 'dracula']
-        if args.theme not in themes:
-            console.print(f"[red]Invalid theme. Available themes: {', '.join(themes)}[/]")
-            return 1
-        config_manager.set_theme(args.theme)
-        console.print(f"[green]Theme set to {args.theme}[/]")
-        return 0
-
     config_path = config_manager.get_config_path()
 
     if args.edit:
@@ -371,13 +360,17 @@ async def handle_tags(args):
         for f in files:
             console.print(f"  {f}")
 
-    elif args.export:
-        export_data = manager.export_tags()
-        print(json.dumps(export_data, indent=2))
-
     elif args.cleanup:
         count = manager.cleanup_missing_files()
         console.print(f"Removed {count} missing files from database.")
+
+    elif args.export:
+        tags = manager.list_all_tags()
+        export_data = [{"tag": t, "count": c} for t, c in tags]
+        if args.json:
+            print(json.dumps(export_data, indent=2))
+        else:
+            console.print(json.dumps(export_data, indent=2))
 
     return 0
 
@@ -423,10 +416,14 @@ async def handle_schedule(args):
             console.print(f"[yellow]Job '{args.remove}' not found.[/]")
 
     elif args.run_now:
-        if await scheduler.run_job_now(args.run_now):
-            console.print(f"[green]Job '{args.run_now}' executed successfully.[/]")
+        jobs = scheduler.list_jobs()
+        job_to_run = next((j for j in jobs if j["name"] == args.run_now), None)
+        if job_to_run:
+            console.print(f"[cyan]Running job '{args.run_now}' immediately...[/]")
+            await scheduler._execute_job(job_to_run)
+            console.print(f"[green]Job '{args.run_now}' completed.[/]")
         else:
-            console.print(f"[yellow]Job '{args.run_now}' not found.[/]")
+            console.print(f"[red]Job '{args.run_now}' not found.[/]")
 
     return 0
 

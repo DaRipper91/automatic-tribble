@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Button, Label, Input, RichLog
+from textual.widgets import Header, Footer, Button, Label, Input, RichLog, Checkbox
 from textual.screen import Screen
 from textual.binding import Binding
 from textual import work
@@ -102,7 +102,6 @@ class AIModeScreen(Screen):
         self.history.append(entry)
         path = Path.home() / ".tfm" / "command_history.json"
         try:
-            path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w") as f:
                 json.dump(self.history, f, indent=2)
         except Exception:
@@ -115,14 +114,12 @@ class AIModeScreen(Screen):
             self.history_index += 1
             cmd = self.history[-(self.history_index+1)]["command"]
             self.query_one("#command_input", Input).value = cmd
-            self.query_one("#command_input", Input).cursor_position = len(cmd)
 
     def action_history_down(self):
         if self.history_index > 0:
             self.history_index -= 1
             cmd = self.history[-(self.history_index+1)]["command"]
             self.query_one("#command_input", Input).value = cmd
-            self.query_one("#command_input", Input).cursor_position = len(cmd)
         elif self.history_index == 0:
             self.history_index = -1
             self.query_one("#command_input", Input).value = ""
@@ -150,6 +147,8 @@ class AIModeScreen(Screen):
                     with Horizontal(id="input-container"):
                         yield Input(placeholder="Describe what you want to do...", id="command_input", classes="command-input")
                         yield Button("Process", id="process_btn", variant="primary")
+
+                    yield Checkbox("Dry-Run Safety Mode", id="dry_run_checkbox", value=True)
 
                     with Horizontal(id="history-container"):
                          yield Button("Search History", id="history_btn", variant="default")
@@ -210,12 +209,23 @@ class AIModeScreen(Screen):
         log.write(message)
 
     @work(thread=True)
-    def _generate_plan_worker(self, command: str, target_path: Path) -> None:
+    def _generate_plan_worker(self, command: str, target_path: Path, use_dry_run: bool = True) -> None:
         """Generate a plan in background."""
         self.app.call_from_thread(self._log_message, f"[dim]Thinking... Context: {target_path}[/]")
 
         try:
             plan_data = self.gemini_client.generate_plan(command, target_path)
+
+            if "fallback_text" in plan_data:
+                fallback_msg = (
+                    "[bold red]AI could not generate a valid plan after retries.[/bold red]\n"
+                    "[bold yellow]Raw Output:[/bold yellow]\n"
+                    f"[dim]{plan_data['fallback_text']}[/dim]\n\n"
+                    "[bold green]Please rephrase your command and try again.[/bold green]"
+                )
+                self.app.call_from_thread(self._log_message, fallback_msg)
+                return
+
             self.current_plan = plan_data.get("plan", [])
 
             if not self.current_plan:
@@ -228,39 +238,31 @@ class AIModeScreen(Screen):
                 icon = "🗑️" if step.get("is_destructive") else "📝"
                 msg += f"{step['step']}. {icon} [bold]{step['action']}[/]: {step['description']}\n"
 
-            # Dry Run Simulation
-            msg += "\n[bold cyan]Dry Run Simulation:[/bold cyan]\n"
-            self.app.call_from_thread(self._log_message, msg)
-
-            # Use a fresh event loop for this thread to avoid "running loop" errors with asyncio.run
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-            try:
+            if use_dry_run:
+                # Dry Run Simulation
+                msg += "\n[bold cyan]Dry Run Simulation:[/bold cyan]\n"
                 for step in self.current_plan:
                      # Running dry run for each step to get prediction
                      try:
-                         res = loop.run_until_complete(self.gemini_client.execute_plan_step(step, dry_run=True))
-
-                         # Determine color based on action/result keywords
-                         color = "green" # Default safe
-                         res_lower = res.lower()
-
-                         if "delete" in res_lower or "remove" in res_lower:
+                         res = asyncio.run(self.gemini_client.execute_plan_step(step, dry_run=True))
+                         if "delete" in res.lower() or "remove" in res.lower():
                              color = "red"
-                         elif "move" in res_lower or "rename" in res_lower or "organize" in res_lower:
+                         elif "move" in res.lower() or "rename" in res.lower() or "organize" in res.lower():
                              color = "yellow"
-
-                         # Explicitly format the simulation output
-                         sim_msg = f"  Step {step['step']}: [{color}]{res}[/{color}]"
-                         self.app.call_from_thread(self._log_message, sim_msg)
+                         else:
+                             color = "green"
+                         msg += f"  Step {step['step']}: [{color}]{res}[/{color}]\n"
                      except Exception as e:
-                         self.app.call_from_thread(self._log_message, f"  Step {step['step']}: [red]Simulation failed: {e}[/]")
-            finally:
-                loop.close()
+                         msg += f"  Step {step['step']}: [red]Simulation failed: {e}[/]\n"
 
-            # Trigger confirmation flow
-            self.app.call_from_thread(self._request_confirmation, command)
+                self.app.call_from_thread(self._log_message, msg)
+                # Trigger confirmation flow
+                self.app.call_from_thread(self._request_confirmation, command)
+            else:
+                self.app.call_from_thread(self._log_message, msg)
+                # Skip confirmation flow, just execute
+                self._save_history_entry(command, self.current_plan, "executed")
+                self._execute_plan_worker()
 
         except Exception as e:
              self.app.call_from_thread(self._log_message, f"[bold red]Error generating plan:[/bold red] {e}")
@@ -292,22 +294,15 @@ class AIModeScreen(Screen):
 
         self.app.call_from_thread(self._log_message, "[bold]Executing Plan...[/]")
 
-        # Use a fresh event loop for this thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        try:
-            for step in self.current_plan:
-                try:
-                    # Real execution (dry_run=False)
-                    result = loop.run_until_complete(self.gemini_client.execute_plan_step(step, dry_run=False))
-                    self.app.call_from_thread(self._log_message, f"[green]✔ Step {step['step']}: {result}[/]")
-                except Exception as e:
-                    self.app.call_from_thread(self._log_message, f"[red]✖ Step {step['step']} Failed: {e}[/]")
-                    self.app.call_from_thread(self._log_message, "[bold red]Execution aborted.[/]")
-                    return
-        finally:
-            loop.close()
+        for step in self.current_plan:
+            try:
+                # Real execution (dry_run=False)
+                result = asyncio.run(self.gemini_client.execute_plan_step(step, dry_run=False))
+                self.app.call_from_thread(self._log_message, f"[green]✔ Step {step['step']}: {result}[/]")
+            except Exception as e:
+                self.app.call_from_thread(self._log_message, f"[red]✖ Step {step['step']} Failed: {e}[/]")
+                self.app.call_from_thread(self._log_message, "[bold red]Execution aborted.[/]")
+                return
 
         self.app.call_from_thread(self._log_message, "[bold green]Plan completed successfully.[/]")
 
@@ -368,6 +363,7 @@ class AIModeScreen(Screen):
         """Process the current command."""
         command_input = self.query_one("#command_input", Input)
         target_dir_input = self.query_one("#target_dir_input", Input)
+        dry_run_checkbox = self.query_one("#dry_run_checkbox", Checkbox)
         log = self.query_one("#output_log", RichLog)
 
         command_text = command_input.value.strip()
@@ -385,4 +381,4 @@ class AIModeScreen(Screen):
         log.write(f"\n[bold blue]Processing command:[/] {command_text}")
 
         # Start background worker
-        self._generate_plan_worker(command_text, target_path)
+        self._generate_plan_worker(command_text, target_path, use_dry_run=dry_run_checkbox.value)
