@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Label, ProgressBar
@@ -82,11 +81,12 @@ class EnhancedStatusBar(Widget):
             label.update("")
 
     def _format_size(self, size: int) -> str:
+        float_size = float(size)
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size < 1024:
-                return f"{size:.2f} {unit}"
-            size /= 1024
-        return f"{size:.2f} PB"
+            if float_size < 1024:
+                return f"{float_size:.2f} {unit}"
+            float_size /= 1024
+        return f"{float_size:.2f} PB"
 
 
 class DualFilePanes(Container):

@@ -10,7 +10,6 @@ from textual.reactive import reactive
 from textual.binding import Binding
 from textual.message import Message
 from rich.text import Text
-from rich.style import Style
 
 class MultiSelectDirectoryTree(DirectoryTree):
     """DirectoryTree with multi-selection support."""
@@ -38,7 +37,8 @@ class MultiSelectDirectoryTree(DirectoryTree):
 
     def action_toggle_selection(self) -> None:
         node = self.cursor_node
-        if not node: return
+        if not node:
+            return
 
         # Determine path from node data
         if not node.data or not hasattr(node.data, 'path'):

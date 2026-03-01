@@ -5,7 +5,7 @@ Tagging system for File Manager.
 import sqlite3
 import logging
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +153,7 @@ class TagManager:
 
     def get_all_tags_export(self) -> Dict[str, List[str]]:
         """Export all tags as a dictionary {file_path: [tags]}."""
-        export_data = {}
+        export_data: Dict[str, List[str]] = {}
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()

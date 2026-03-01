@@ -5,9 +5,10 @@ User Mode Screen - Standard File Manager Interface with Tabs, Preview, and Multi
 from typing import Optional, List
 from pathlib import Path
 import shutil
+import logging
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Label, TabbedContent, TabPane, Tree, ProgressBar
+from textual.containers import Container, Horizontal
+from textual.widgets import Header, Footer, TabbedContent, TabPane, Tree, ProgressBar
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
@@ -15,10 +16,12 @@ from textual import on, work
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel, MultiSelectDirectoryTree
-from .screens import ConfirmationScreen, HelpScreen, InputScreen, ThemeSwitcher
+from .screens import ConfirmationScreen, InputScreen, ThemeSwitcher
 from .ui_components import DualFilePanes, EnhancedStatusBar
 from .file_preview import FilePreview
 from .help_overlay import HelpOverlay
+
+logger = logging.getLogger(__name__)
 
 class UserModeScreen(Screen):
     """The main file manager interface."""
@@ -131,7 +134,8 @@ class UserModeScreen(Screen):
     def action_close_tab(self) -> None:
         """Close the current tab."""
         tabs = self.query_one(TabbedContent)
-        if not tabs.active: return
+        if not tabs.active:
+            return
 
         try:
             tabs.remove_pane(tabs.active)
@@ -142,7 +146,8 @@ class UserModeScreen(Screen):
     def action_next_tab(self) -> None:
         tabs = self.query_one(TabbedContent)
         panes = list(tabs.query(TabPane))
-        if not panes: return
+        if not panes:
+            return
 
         try:
             current_id = tabs.active
@@ -186,11 +191,13 @@ class UserModeScreen(Screen):
 
     def _get_active_dual_panes(self) -> Optional[DualFilePanes]:
         tabs = self.query_one(TabbedContent)
-        if not tabs.active: return None
+        if not tabs.active:
+            return None
         try:
              pane = tabs.get_pane(tabs.active)
              return pane.query_one(DualFilePanes)
-        except:
+        except Exception as e:
+             logger.error(f"Error getting active dual panes: {e}")
              return None
 
     def _focus_active_panel(self) -> None:
@@ -200,7 +207,8 @@ class UserModeScreen(Screen):
 
     def _update_progress(self, progress: float) -> None:
         dual = self._get_active_dual_panes()
-        if not dual: return
+        if not dual:
+            return
 
         try:
             bar = dual.query_one("#operation-progress", ProgressBar)
@@ -217,13 +225,15 @@ class UserModeScreen(Screen):
 
     def action_copy(self) -> None:
         dual = self._get_active_dual_panes()
-        if not dual: return
+        if not dual:
+            return
 
         source_panel = dual.active_panel
         target_panel = dual.inactive_panel
 
         selected_paths = source_panel.get_selected_paths()
-        if not selected_paths: return
+        if not selected_paths:
+            return
 
         target_dir = target_panel.current_dir
 
@@ -258,13 +268,15 @@ class UserModeScreen(Screen):
 
     def action_move(self) -> None:
         dual = self._get_active_dual_panes()
-        if not dual: return
+        if not dual:
+            return
 
         source_panel = dual.active_panel
         target_panel = dual.inactive_panel
 
         selected_paths = source_panel.get_selected_paths()
-        if not selected_paths: return
+        if not selected_paths:
+            return
 
         target_dir = target_panel.current_dir
 
@@ -300,11 +312,13 @@ class UserModeScreen(Screen):
 
     def action_delete(self) -> None:
         dual = self._get_active_dual_panes()
-        if not dual: return
+        if not dual:
+            return
 
         source_panel = dual.active_panel
         selected_paths = source_panel.get_selected_paths()
-        if not selected_paths: return
+        if not selected_paths:
+            return
 
         def check_confirm(confirmed: Optional[bool]) -> None:
             if confirmed:
@@ -336,13 +350,15 @@ class UserModeScreen(Screen):
 
     def action_new_dir(self) -> None:
         dual = self._get_active_dual_panes()
-        if not dual: return
+        if not dual:
+            return
 
         active_panel = dual.active_panel
         current_dir = active_panel.current_dir
 
         def do_create_dir(dir_name: Optional[str]) -> None:
-            if not dir_name: return
+            if not dir_name:
+                return
             self._background_create_dir(current_dir, dir_name, active_panel)
 
         self.app.push_screen(
@@ -363,14 +379,17 @@ class UserModeScreen(Screen):
     def action_rename(self) -> None:
         # Rename only supports single file usually
         dual = self._get_active_dual_panes()
-        if not dual: return
+        if not dual:
+            return
 
         active_panel = dual.active_panel
         selected_path = active_panel.get_selected_path()
-        if not selected_path: return
+        if not selected_path:
+            return
 
         def do_rename(new_name: Optional[str]) -> None:
-            if not new_name or new_name == selected_path.name: return
+            if not new_name or new_name == selected_path.name:
+                return
             self._background_rename(selected_path, new_name, active_panel)
 
         self.app.push_screen(
@@ -421,7 +440,8 @@ class UserModeScreen(Screen):
     def _update_status_bar(self) -> None:
         dual = self._get_active_dual_panes()
         status_bar = self.query_one(EnhancedStatusBar)
-        if not dual: return
+        if not dual:
+            return
 
         active_panel = dual.active_panel
         selected = active_panel.get_selected_paths()
@@ -435,14 +455,17 @@ class UserModeScreen(Screen):
         try:
             total, used, free = shutil.disk_usage(active_panel.current_dir)
             status_bar.free_space = self._format_size(free)
-        except:
+        except Exception as e:
+            logger.error(f"Error getting disk usage: {e}")
             status_bar.free_space = "N/A"
 
     def _update_preview(self) -> None:
-        if not self.show_preview: return
+        if not self.show_preview:
+            return
 
         dual = self._get_active_dual_panes()
-        if not dual: return
+        if not dual:
+            return
 
         active_panel = dual.active_panel
         path = active_panel.get_selected_path()
@@ -454,7 +477,9 @@ class UserModeScreen(Screen):
         self.query_one(EnhancedStatusBar).is_loading = loading
 
     def _format_size(self, size: int) -> str:
+        float_size = float(size)
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-             if size < 1024: return f"{size:.2f} {unit}"
-             size /= 1024
-        return f"{size:.2f} PB"
+            if float_size < 1024:
+                return f"{float_size:.2f} {unit}"
+            float_size /= 1024
+        return f"{float_size:.2f} PB"

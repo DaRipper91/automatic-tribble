@@ -92,7 +92,8 @@ class FilePreview(Static):
             with open(path, 'r', encoding='utf-8') as f:
                 for _ in range(100):
                     line = f.readline()
-                    if not line: break
+                    if not line:
+                        break
                     lines.append(line)
             return "".join(lines)
 
@@ -135,11 +136,12 @@ class FilePreview(Static):
         if len(data) == 512:
             content += "\n..."
 
-        self.update(Panel(content, title=f"Binary Preview (First 512 bytes)", border_style="yellow"))
+        self.update(Panel(content, title="Binary Preview (First 512 bytes)", border_style="yellow"))
 
     def _format_size(self, size: int) -> str:
+        float_size = float(size)
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-            if size < 1024:
-                return f"{size:.2f} {unit}"
-            size /= 1024
-        return f"{size:.2f} PB"
+            if float_size < 1024:
+                return f"{float_size:.2f} {unit}"
+            float_size /= 1024
+        return f"{float_size:.2f} PB"
