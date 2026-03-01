@@ -94,3 +94,16 @@ class TestOperationHistory:
         assert len(history._redo_stack) == 0
         assert len(history._undo_stack) == 1
         assert history._undo_stack[0] == op2
+
+    def test_load_corrupted_file(self, history_file, caplog):
+        # Create a corrupted history file
+        (history_file.parent / ".tfm").mkdir(parents=True, exist_ok=True)
+        with open(history_file.parent / ".tfm" / "history.pkl", "wb") as f:
+            f.write(b"not a pickle")
+
+        with patch("pathlib.Path.home", return_value=history_file.parent):
+            with caplog.at_level("ERROR"):
+                h = OperationHistory()
+                assert len(h._undo_stack) == 0
+                assert len(h._redo_stack) == 0
+                assert "Failed to load operation history" in caplog.text

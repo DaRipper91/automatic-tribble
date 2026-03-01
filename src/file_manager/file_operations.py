@@ -4,6 +4,7 @@ File operations module for copy, move, delete, etc.
 
 import asyncio
 import os
+import pickle
 import shutil
 import uuid
 from pathlib import Path
@@ -45,22 +46,20 @@ class OperationHistory:
     def _load(self):
         if self.history_file.exists():
             try:
-                import pickle
                 with open(self.history_file, "rb") as f:
                     data = pickle.load(f)
                     self._undo_stack = data.get("undo", [])
                     self._redo_stack = data.get("redo", [])
-            except Exception:
-                pass
+            except (pickle.PickleError, EOFError, OSError, AttributeError, ImportError) as e:
+                logger.error(f"Failed to load operation history: {e}")
 
     def _save(self):
         try:
-            import pickle
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.history_file, "wb") as f:
                 pickle.dump({"undo": self._undo_stack, "redo": self._redo_stack}, f)
-        except Exception:
-            pass
+        except (pickle.PickleError, OSError) as e:
+            logger.error(f"Failed to save operation history: {e}")
 
     def log_operation(self, op: FileOperation) -> None:
         """Log an operation to the undo stack."""
