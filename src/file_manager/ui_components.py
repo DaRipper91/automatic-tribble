@@ -1,5 +1,4 @@
 from pathlib import Path
-from typing import Optional
 from textual.app import ComposeResult
 from textual.widget import Widget
 from textual.widgets import Label, ProgressBar

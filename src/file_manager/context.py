@@ -6,7 +6,7 @@ import os
 import time
 import heapq
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 from dataclasses import dataclass, asdict
 
 @dataclass

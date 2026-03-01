@@ -97,21 +97,32 @@ User Mode is a dual-pane file manager designed for speed and keyboard efficiency
 
 ## 🤖 AI Mode (Automation)
 
-AI Mode uses natural language processing to understand your intent and execute complex file operations automatically.
+AI Mode uses a local Gemini client to interpret natural language commands and execute complex file automation tasks. It features a robust multi-step planning engine, strict JSON validation, and context-aware directory analysis to make automation intelligent and safe.
 
-### How to Use
+### How to Use Multi-Step Planning
 1.  **Select Target Directory**: Enter the path where you want operations to happen (default is current directory).
 2.  **Enter Command**: Type what you want to do in plain English.
-    - *Example:* "Organize all PDFs into a Documents folder and clean up files older than 30 days."
-    - *Example:* "Find and delete duplicate images."
+    - *Example:* "Clean up my desktop and sort everything into organized folders by project."
 3.  **Process**: Click **Process** or press `Enter`.
-4.  **Review Plan**: The AI will propose a structured plan with steps.
-5.  **Dry Run Simulation**: TFM will simulate the plan and show you exactly what will change (files moved, deleted, etc.) with color-coded feedback.
-6.  **Confirm**: Click **Confirm & Execute** to apply the changes.
+4.  **Review Plan**: The AI will return a structured JSON plan containing an ordered list of atomic operations (each with action, source, target, description, and safety flags). This plan is displayed as a numbered checklist in the log.
+5.  **Dry Run Simulation (Default)**: By default, TFM will simulate the full operation first, computing a diff of what would change. It displays this diff with color-coded output (green for new, yellow for moved, red for deleted). You can disable this via the UI toggle if you are a power user.
+6.  **Confirm & Execute**: You must explicitly click the **Confirm & Execute** button to proceed. TFM will execute the steps sequentially, reporting per-step success or failure in real-time.
 
-### Command History
-- Use `Up` / `Down` arrows in the input box to cycle through previous commands.
-- Click **Search History** to find past commands.
+### Context-Aware Directory Summarization
+When you open AI Mode or type a command, TFM automatically runs a lightweight background scan of the current directory. It injects a structured summary into the AI prompt, including:
+- Total file count and size breakdown by category.
+- Oldest and newest files.
+- Top 5 largest files.
+- Detected duplicate file groups.
+*(This context is cached for 60 seconds to optimize performance).*
+
+### AI Response Validation & Fallback
+Every response from the AI is defensively parsed against strict JSON schemas. If the AI returns malformed JSON or an invalid plan, TFM will automatically retry the request up to 3 times, providing the validation error back to the model as feedback. If all retries fail, it gracefully falls back to showing the raw response text.
+
+### AI Mode Command History & Semantic Search
+Every command entered in AI Mode is persisted to `~/.tfm/command_history.json`, along with the resulting plan and whether it was executed or cancelled.
+- **Cycle History**: Use `Up` / `Down` arrows in the input box to cycle through recent commands.
+- **Semantic Search**: Click the **Search History** button to send a semantic similarity query to the AI (e.g., "find commands similar to 'organize photos'") against your past history.
 
 ### ✨ Quick Actions
 The left panel provides buttons for common tasks:
@@ -120,8 +131,6 @@ The left panel provides buttons for common tasks:
 - **🧹 Cleanup Old Files**: Finds and removes files older than 30 days.
 - **👯 Find Duplicates**: Identifies identical files to help you save space.
 - **🏷️ Batch Rename**: Renames files based on a pattern.
-
----
 
 ## ⚡ CLI Automation (`tfm-auto`)
 
@@ -186,23 +195,28 @@ tfm-auto rename --dir ./Photos --pattern "IMG_" --replacement "Vacation_"
 ```
 
 ### 6. File Tagging
-Manage custom tags for your files.
+Manage custom tags for your files. The AI-powered tagging system analyzes filenames, extensions, and directory context to automatically suggest tags. It uses a local SQLite database stored at `~/.tfm/tags.db`.
+
 ```bash
-# Add a tag
+# Add a tag manually via natural language or directly:
 tfm-auto tags --add ./document.pdf important
 
-# List all tags
+# List all tags in the database
 tfm-auto tags --list
 
-# Find files by tag
+# Search for files with a specific tag
 tfm-auto tags --search important
+
+# Export tags
+tfm-auto tags --export
 
 # Remove a tag
 tfm-auto tags --remove ./document.pdf important
 ```
 
 ### 7. Task Scheduler
-Automate recurring tasks using cron expressions.
+Build persistent recurring automation jobs stored in `~/.tfm/schedule.json`.
+
 ```bash
 # List scheduled jobs
 tfm-auto schedule --list
@@ -211,10 +225,14 @@ tfm-auto schedule --list
 # Note: Params must be valid JSON
 tfm-auto schedule --add "daily_org" "0 0 * * *" "organize_by_type" '{"source": "/home/user/Downloads", "target": "/home/user/Sorted"}'
 
+# Run a scheduled job immediately
+tfm-auto schedule --run-now "daily_org"
+
 # Remove a job
 tfm-auto schedule --remove "daily_org"
 
-# Run the scheduler daemon (keeps running)
+# Run the scheduler daemon (checks and executes due tasks every minute)
+# Logs results to ~/.tfm/scheduler.log
 tfm-auto schedule --daemon
 ```
 

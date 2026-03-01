@@ -6,8 +6,8 @@ from typing import Optional, List
 from pathlib import Path
 import shutil
 from textual.app import ComposeResult
-from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Label, TabbedContent, TabPane, Tree, ProgressBar
+from textual.containers import Container, Horizontal
+from textual.widgets import Header, Footer, TabbedContent, TabPane, Tree, ProgressBar
 from textual.binding import Binding
 from textual.reactive import reactive
 from textual.screen import Screen
@@ -15,7 +15,7 @@ from textual import on, work
 
 from .file_operations import FileOperations
 from .file_panel import FilePanel, MultiSelectDirectoryTree
-from .screens import ConfirmationScreen, HelpScreen, InputScreen, ThemeSwitcher
+from .screens import ConfirmationScreen, InputScreen, ThemeSwitcher
 from .ui_components import DualFilePanes, EnhancedStatusBar
 from .file_preview import FilePreview
 from .help_overlay import HelpOverlay

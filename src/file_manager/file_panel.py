@@ -10,7 +10,6 @@ from textual.reactive import reactive
 from textual.binding import Binding
 from textual.message import Message
 from rich.text import Text
-from rich.style import Style
 
 class MultiSelectDirectoryTree(DirectoryTree):
     """DirectoryTree with multi-selection support."""

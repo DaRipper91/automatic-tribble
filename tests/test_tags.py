@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from src.file_manager.tags import TagManager
 
 @pytest.fixture
