@@ -254,13 +254,14 @@ Extend functionality by adding Python scripts to `~/.tfm/plugins/`.
     ```
 2.  **Create a plugin file** (e.g., `my_plugin.py`):
     ```python
-    from src.file_manager.plugins import TFMPlugin
+    from src.file_manager.plugins.base import TFMPlugin
+    from pathlib import Path
 
     class MyPlugin(TFMPlugin):
-        def on_file_added(self, path):
+        def on_file_added(self, path: Path):
             print(f"Plugin: File added at {path}")
 
-        def on_file_deleted(self, path):
+        def on_file_deleted(self, path: Path):
             print(f"Plugin: File deleted at {path}")
     ```
 3.  **Restart TFM**: The plugin will be automatically loaded.

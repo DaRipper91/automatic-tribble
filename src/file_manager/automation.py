@@ -112,8 +112,6 @@ class FileOrganizer:
         if not dry_run:
             await self.file_ops.create_directory(target_dir, exist_ok=True)
 
-        # files = list(source_dir.iterdir()) # Original
-        # Better safety: use existing iter logic or just keep it simple
         try:
             files = list(source_dir.iterdir())
         except OSError:
@@ -154,11 +152,12 @@ class FileOrganizer:
                     organized[key] = []
                 organized[key].append(target_path)
 
+                if progress_queue:
+                    await progress_queue.put(file_path)
+
             except Exception as e:
                 logger.warning(f"Failed to organize {file_path}: {e}")
             
-            if progress_queue:
-                progress_queue.put_nowait(file_path)
 
         self.organized_files = organized
         return organized
@@ -190,7 +189,7 @@ class FileOrganizer:
                         await self.file_ops.delete(file_path)
 
                     if progress_queue:
-                        progress_queue.put_nowait(file_path)
+                        await progress_queue.put(file_path)
             except OSError as e:
                 logger.debug(f"Failed to process {file_path} for cleanup: {e}")
                 continue
@@ -204,6 +203,7 @@ class FileOrganizer:
     ) -> Dict[str, List[Path]]:
         """
         Find duplicate files based on size and content.
+        Uses a 3-pass strategy: Size -> Partial Hash -> Full Hash.
         """
         return await asyncio.to_thread(self._find_duplicates_sync, directory, recursive)
 
@@ -212,10 +212,10 @@ class FileOrganizer:
         directory: Path,
         recursive: bool = True
     ) -> Dict[str, List[Path]]:
-        """Sync implementation of find_duplicates."""
-        # First group by size (quick)
-        size_groups: Dict[int, List[Path]] = {}
+        """Sync implementation of find_duplicates with 3-pass strategy."""
         
+        # Pass 1: Group by Size
+        size_groups: Dict[int, List[Path]] = {}
         try:
             entries: Iterator[os.DirEntry[str]]
             if recursive:
@@ -237,39 +237,43 @@ class FileOrganizer:
         except (PermissionError, OSError) as e:
             logger.error(f"Error scanning directory for duplicates: {e}")
         
-        # Then verify with hash (slower but accurate)
-        duplicates: Dict[str, List[Path]] = {}
-        
-        for size, files in size_groups.items():
-            if len(files) < 2:
-                continue
+        # Filter for possible duplicates (more than 1 file with same size)
+        candidates_by_size = {s: files for s, files in size_groups.items() if len(files) > 1}
 
-            partial_groups: Dict[str, List[Path]] = {}
+        # Pass 2: Partial Hash (first/last 64KB)
+        partial_groups: Dict[str, List[Path]] = {}
+
+        for size, files in candidates_by_size.items():
             for file_path in files:
                 try:
                     # Use 64KB for partial hash
                     partial_hash = self._compute_partial_hash(file_path, chunk_size=65536, file_size=size)
-                    if partial_hash not in partial_groups:
-                        partial_groups[partial_hash] = []
-                    partial_groups[partial_hash].append(file_path)
+                    # Key needs to include size to avoid collision between varying sizes with same partial content (rare but possible)
+                    key = f"{size}:{partial_hash}"
+                    if key not in partial_groups:
+                        partial_groups[key] = []
+                    partial_groups[key].append(file_path)
                 except OSError as e:
                     logger.debug(f"Failed to compute partial hash for {file_path}: {e}")
                     continue
 
-            for partial_files in partial_groups.values():
-                if len(partial_files) < 2:
+        candidates_by_partial = [files for files in partial_groups.values() if len(files) > 1]
+
+        # Pass 3: Full Hash (SHA-256)
+        duplicates: Dict[str, List[Path]] = {}
+        
+        for group in candidates_by_partial:
+            for file_path in group:
+                try:
+                    file_hash = self._compute_file_hash(file_path)
+                    if file_hash not in duplicates:
+                        duplicates[file_hash] = []
+                    duplicates[file_hash].append(file_path)
+                except OSError as e:
+                    logger.debug(f"Failed to compute full hash for {file_path}: {e}")
                     continue
 
-                for file_path in partial_files:
-                    try:
-                        file_hash = self._compute_file_hash(file_path)
-                        if file_hash not in duplicates:
-                            duplicates[file_hash] = []
-                        duplicates[file_hash].append(file_path)
-                    except OSError as e:
-                        logger.debug(f"Failed to compute full hash for {file_path}: {e}")
-                        continue
-        
+        # Final filtering
         result = {
             hash_val: paths for hash_val, paths in duplicates.items()
             if len(paths) > 1
@@ -295,20 +299,28 @@ class FileOrganizer:
 
             sorted_paths = list(paths)
             try:
+                # Determine which file to KEEP (index 0)
                 if strategy == ConflictResolutionStrategy.KEEP_NEWEST:
+                    # Sort descending by mtime (newest first)
                     sorted_paths.sort(key=lambda p: p.stat().st_mtime, reverse=True)
                 elif strategy == ConflictResolutionStrategy.KEEP_OLDEST:
+                    # Sort ascending by mtime (oldest first)
                     sorted_paths.sort(key=lambda p: p.stat().st_mtime)
                 elif strategy == ConflictResolutionStrategy.KEEP_LARGEST:
+                    # Sort descending by size (largest first - theoretically duplicates have same size, but good for robustness)
                     sorted_paths.sort(key=lambda p: p.stat().st_size, reverse=True)
                 elif strategy == ConflictResolutionStrategy.KEEP_SMALLEST:
+                    # Sort ascending by size
                     sorted_paths.sort(key=lambda p: p.stat().st_size)
                 elif strategy == ConflictResolutionStrategy.INTERACTIVE:
+                    # Interactive resolution is handled by caller (CLI/UI), they pass specific list to delete?
+                    # Or maybe this method just returns candidates if interactive?
+                    # For now, let's assume interactive means we skip auto-deletion here.
                     continue
             except OSError:
                 continue
 
-            # Keep first, delete rest
+            # Keep first (index 0), delete rest (index 1:)
             to_delete = sorted_paths[1:]
 
             for p in to_delete:
@@ -316,7 +328,7 @@ class FileOrganizer:
                     await self.file_ops.delete(p)
                     deleted_files.append(p)
                     if progress_queue:
-                        progress_queue.put_nowait(p)
+                        await progress_queue.put(p)
                 except Exception as e:
                     logger.warning(f"Failed to delete duplicate {p}: {e}")
 
@@ -384,7 +396,7 @@ class FileOrganizer:
                     renamed_files.append(new_path)
 
                     if progress_queue:
-                        progress_queue.put_nowait(new_path)
+                        await progress_queue.put(new_path)
                 except Exception as e:
                     logger.warning(f"Failed to rename {file_path} to {new_name}: {e}")
                     continue

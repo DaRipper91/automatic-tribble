@@ -29,6 +29,7 @@ from .file_operations import FileOperations
 from .config import ConfigManager
 from .tags import TagManager
 from .scheduler import TaskScheduler
+from .exceptions import TFMPathNotFoundError, TFMOperationConflictError, TFMPermissionError
 
 console = Console()
 
@@ -498,11 +499,18 @@ async def main_async():
     if handler:
         try:
             return await handler(args)
+        except (TFMPathNotFoundError, TFMOperationConflictError, TFMPermissionError) as e:
+             if args.json:
+                 print(json.dumps({"error": str(e), "type": e.__class__.__name__}))
+             else:
+                 console.print(f"[bold red]Error ({e.__class__.__name__}):[/bold red] {str(e)}")
+             return 1
         except Exception as e:
             if args.json:
-                 print(json.dumps({"error": str(e)}))
+                 print(json.dumps({"error": str(e), "type": "UnhandledException"}))
             else:
                  console.print(f"[bold red]Error:[/bold red] {str(e)}")
+                 console.print_exception()
             return 1
     else:
         return 1
