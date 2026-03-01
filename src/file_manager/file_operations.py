@@ -3,6 +3,7 @@ File operations module for copy, move, delete, etc.
 """
 
 import asyncio
+import json
 import os
 import shutil
 import uuid
@@ -33,32 +34,64 @@ class FileOperation:
     timestamp: datetime = field(default_factory=datetime.now)
     trash_path: Optional[Path] = None
 
+    def to_dict(self) -> dict:
+        """Convert the operation to a JSON-serializable dictionary."""
+        return {
+            "type": self.type.name,
+            "original_path": str(self.original_path),
+            "target_path": str(self.target_path) if self.target_path else None,
+            "timestamp": self.timestamp.isoformat(),
+            "trash_path": str(self.trash_path) if self.trash_path else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "FileOperation":
+        """Create a FileOperation from a dictionary."""
+        return cls(
+            type=OperationType[data["type"]],
+            original_path=Path(data["original_path"]),
+            target_path=Path(data["target_path"]) if data.get("target_path") else None,
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            trash_path=Path(data["trash_path"]) if data.get("trash_path") else None,
+        )
+
 class OperationHistory:
     """Tracks destructive operations and supports undo/redo."""
 
     def __init__(self):
         self._undo_stack: List[FileOperation] = []
         self._redo_stack: List[FileOperation] = []
-        self.history_file = Path.home() / ".tfm" / "history.pkl"
+        self.history_file = Path.home() / ".tfm" / "history.json"
+        self._cleanup_old_history()
         self._load()
+
+    def _cleanup_old_history(self):
+        """Remove the old insecure pickle history file if it exists."""
+        old_history = self.history_file.with_suffix(".pkl")
+        if old_history.exists():
+            try:
+                old_history.unlink()
+            except Exception:
+                pass
 
     def _load(self):
         if self.history_file.exists():
             try:
-                import pickle
-                with open(self.history_file, "rb") as f:
-                    data = pickle.load(f)
-                    self._undo_stack = data.get("undo", [])
-                    self._redo_stack = data.get("redo", [])
+                with open(self.history_file, "r") as f:
+                    data = json.load(f)
+                    self._undo_stack = [FileOperation.from_dict(d) for d in data.get("undo", [])]
+                    self._redo_stack = [FileOperation.from_dict(d) for d in data.get("redo", [])]
             except Exception:
                 pass
 
     def _save(self):
         try:
-            import pickle
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_file, "wb") as f:
-                pickle.dump({"undo": self._undo_stack, "redo": self._redo_stack}, f)
+            with open(self.history_file, "w") as f:
+                json.dump({
+                    "undo": [op.to_dict() for op in self._undo_stack],
+                    "redo": [op.to_dict() for op in self._redo_stack]
+                }, f)
         except Exception:
             pass
 

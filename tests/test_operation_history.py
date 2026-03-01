@@ -7,26 +7,17 @@ class TestOperationHistory:
 
     @pytest.fixture
     def history_file(self, tmp_path):
-        return tmp_path / "history.pkl"
+        return tmp_path / "history.json"
 
     @pytest.fixture
     def history(self, history_file):
-        # We need to patch Path.home() so __init__ uses our temp path,
-        # OR we can patch where it constructs the path.
-        # But since __init__ does `Path.home() / ".tfm" / "history.pkl"`,
-        # let's just patch `pathlib.Path.home` to return `tmp_path`.
-        # However, `tmp_path` is a fixture.
-
-        # Alternative: We can just let it try to load (it will fail or load nothing if real file doesn't exist,
-        # or load real history which is bad).
-        # Better to patch.
-
+        # We need to patch Path.home() so __init__ uses our temp path
         with patch("pathlib.Path.home", return_value=history_file.parent):
              # It expects .tfm subdir
-            (history_file.parent / ".tfm").mkdir()
+            (history_file.parent / ".tfm").mkdir(exist_ok=True)
             h = OperationHistory()
             # Verify it uses the correct path
-            assert h.history_file == history_file.parent / ".tfm" / "history.pkl"
+            assert h.history_file == history_file.parent / ".tfm" / "history.json"
             return h
 
     def test_log_operation(self, history):
@@ -62,7 +53,7 @@ class TestOperationHistory:
         history.log_operation(op)
 
         # Verify file exists
-        assert (history_file.parent / ".tfm" / "history.pkl").exists()
+        assert (history_file.parent / ".tfm" / "history.json").exists()
 
         # Create a new instance and verify it loads
         with patch("pathlib.Path.home", return_value=history_file.parent):
@@ -70,6 +61,22 @@ class TestOperationHistory:
             assert len(new_history._undo_stack) == 1
             assert new_history._undo_stack[0].type == OperationType.CREATE_DIR
             assert new_history._undo_stack[0].original_path == Path("/new_dir")
+
+    def test_cleanup_old_pickle_file(self, tmp_path):
+        # Create a dummy .pkl file
+        tfm_dir = tmp_path / ".tfm"
+        tfm_dir.mkdir()
+        old_file = tfm_dir / "history.pkl"
+        old_file.write_text("dummy pickle content")
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            history = OperationHistory()
+            # Verify old file is gone
+            assert not old_file.exists()
+            # Verify new file is created (after log)
+            op = FileOperation(OperationType.CREATE_DIR, Path("/new_dir"))
+            history.log_operation(op)
+            assert (tfm_dir / "history.json").exists()
 
     def test_clear(self, history):
         op = FileOperation(OperationType.RENAME, Path("/old"), Path("/new"))
