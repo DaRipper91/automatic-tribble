@@ -1,5 +1,4 @@
 import pytest
-import os
 import tempfile
 from pathlib import Path
 from src.file_manager.file_operations import FileOperations

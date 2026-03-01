@@ -3,7 +3,7 @@ import pytest
 import time
 import asyncio
 from textual.app import App, ComposeResult
-from textual.widgets import Input, Log
+from textual.widgets import Input
 from src.file_manager.screens import AIConfigScreen
 from src.file_manager.ai_utils import AIExecutor
 

@@ -135,7 +135,7 @@ class FilePreview(Static):
         if len(data) == 512:
             content += "\n..."
 
-        self.update(Panel(content, title=f"Binary Preview (First 512 bytes)", border_style="yellow"))
+        self.update(Panel(content, title="Binary Preview (First 512 bytes)", border_style="yellow"))
 
     def _format_size(self, size: int) -> str:
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
