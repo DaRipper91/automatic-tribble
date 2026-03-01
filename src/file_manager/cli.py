@@ -18,7 +18,6 @@ try:
     from rich.console import Console
     from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
     from rich.table import Table
-    from rich.prompt import Prompt
 except ImportError:
     print("Error: 'rich' library is required. Please install it.", file=sys.stderr)
     sys.exit(1)
@@ -29,7 +28,6 @@ from .file_operations import FileOperations
 from .config import ConfigManager
 from .tags import TagManager
 from .scheduler import TaskScheduler
-from .exceptions import TFMPathNotFoundError, TFMOperationConflictError, TFMPermissionError
 
 console = Console()
 
@@ -84,7 +82,6 @@ def setup_parser():
     # Config command
     config = subparsers.add_parser('config', help='Manage configuration')
     config.add_argument('--edit', action='store_true', help='Edit configuration file')
-    config.add_argument('--theme', choices=['dark', 'light', 'solarized', 'dracula'], help='Set application theme')
 
     # Tags command
     tags = subparsers.add_parser('tags', help='Manage file tags')
@@ -93,7 +90,7 @@ def setup_parser():
     tags.add_argument('--list', action='store_true', help='List all tags')
     tags.add_argument('--search', metavar='TAG', help='List files with tag')
     tags.add_argument('--cleanup', action='store_true', help='Clean up missing files')
-    tags.add_argument('--export', action='store_true', help='Export tags to JSON')
+    tags.add_argument('--export', action='store_true', help='Export all tags to JSON')
 
     # Schedule command
     schedule = subparsers.add_parser('schedule', help='Manage scheduled tasks')
@@ -217,50 +214,10 @@ async def handle_duplicates(args):
             strategy = ConflictResolutionStrategy.KEEP_OLDEST
 
         if strategy == ConflictResolutionStrategy.INTERACTIVE:
-            if args.json:
-                print(json.dumps({"error": "Interactive mode not supported in JSON output mode"}))
-                return 1
-
-            deleted_files = []
-            for hash_val, paths in duplicates.items():
-                if len(paths) < 2:
-                    continue
-
-                console.print(f"\n[bold yellow]Duplicate Group ({len(paths)} files):[/bold yellow]")
-                for idx, path in enumerate(paths):
-                    try:
-                        size_str = FileOperations.format_size(path.stat().st_size)
-                        mtime_str = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-                    except OSError:
-                        size_str = "Unknown"
-                        mtime_str = "Unknown"
-                    console.print(f"  [{idx + 1}] {path} (Size: {size_str}, Modified: {mtime_str})")
-
-                choice = Prompt.ask(
-                    "Select file to [bold green]KEEP[/bold green] (enter number)",
-                    default="1"
-                )
-
-                try:
-                    keep_idx = int(choice) - 1
-                    if 0 <= keep_idx < len(paths):
-                        # paths[keep_idx] is kept
-                        for i, path in enumerate(paths):
-                            if i != keep_idx:
-                                try:
-                                    await organizer.file_ops.delete(path)
-                                    deleted_files.append(path)
-                                    console.print(f"  [red]Deleted:[/red] {path}")
-                                except Exception as e:
-                                    console.print(f"  [bold red]Error deleting {path}: {e}[/bold red]")
-                    else:
-                        console.print("[red]Invalid selection. Skipping group.[/red]")
-                except ValueError:
-                     console.print("[red]Invalid input. Skipping group.[/red]")
-
-            console.print(f"\n[green]Resolved duplicates. Deleted {len(deleted_files)} files.[/green]")
-            return 0
-
+             if args.json:
+                 pass
+             else:
+                 console.print("Interactive mode not supported in CLI.")
         else:
              deleted = await organizer.resolve_duplicates(duplicates, strategy, progress_queue)
              if args.json:
@@ -356,12 +313,6 @@ async def handle_redo(args):
 
 async def handle_config(args):
     config_manager = ConfigManager()
-
-    if args.theme:
-        config_manager.set_theme(args.theme)
-        console.print(f"[green]Theme set to: {args.theme}[/]")
-        return 0
-
     config_path = config_manager.get_config_path()
 
     if args.edit:
@@ -369,7 +320,6 @@ async def handle_config(args):
         subprocess.call([editor, str(config_path)])
     else:
         console.print(f"Configuration file: {config_path}")
-        console.print(f"Current Theme: [bold]{config_manager.get_theme()}[/]")
         categories = config_manager.load_categories()
         console.print(categories)
 
@@ -385,7 +335,7 @@ async def handle_tags(args):
         if manager.add_tag(path, tag):
             console.print(f"[green]Added tag '{tag}' to {path}[/]")
         else:
-            console.print("[red]Failed to add tag.[/]")
+            console.print(f"[red]Failed to add tag.[/]")
 
     elif args.remove:
         path = Path(args.remove[0])
@@ -393,7 +343,7 @@ async def handle_tags(args):
         if manager.remove_tag(path, tag):
              console.print(f"[green]Removed tag '{tag}' from {path}[/]")
         else:
-             console.print("[yellow]Tag not found.[/]")
+             console.print(f"[yellow]Tag not found.[/]")
 
     elif args.list:
         tags = manager.list_all_tags()
@@ -410,13 +360,13 @@ async def handle_tags(args):
         for f in files:
             console.print(f"  {f}")
 
+    elif args.export:
+        export_data = manager.export_tags()
+        print(json.dumps(export_data, indent=2))
+
     elif args.cleanup:
         count = manager.cleanup_missing_files()
         console.print(f"Removed {count} missing files from database.")
-
-    elif args.export:
-        data = manager.get_all_tags_export()
-        print(json.dumps(data, indent=2))
 
     return 0
 
@@ -462,10 +412,10 @@ async def handle_schedule(args):
             console.print(f"[yellow]Job '{args.remove}' not found.[/]")
 
     elif args.run_now:
-        if await scheduler.run_now(args.run_now):
-            console.print(f"[green]Job '{args.run_now}' executed.[/]")
+        if await scheduler.run_job_now(args.run_now):
+            console.print(f"[green]Job '{args.run_now}' executed successfully.[/]")
         else:
-            console.print(f"[red]Job '{args.run_now}' not found.[/]")
+            console.print(f"[yellow]Job '{args.run_now}' not found.[/]")
 
     return 0
 
@@ -499,18 +449,11 @@ async def main_async():
     if handler:
         try:
             return await handler(args)
-        except (TFMPathNotFoundError, TFMOperationConflictError, TFMPermissionError) as e:
-             if args.json:
-                 print(json.dumps({"error": str(e), "type": e.__class__.__name__}))
-             else:
-                 console.print(f"[bold red]Error ({e.__class__.__name__}):[/bold red] {str(e)}")
-             return 1
         except Exception as e:
             if args.json:
-                 print(json.dumps({"error": str(e), "type": "UnhandledException"}))
+                 print(json.dumps({"error": str(e)}))
             else:
                  console.print(f"[bold red]Error:[/bold red] {str(e)}")
-                 console.print_exception()
             return 1
     else:
         return 1

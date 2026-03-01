@@ -1,17 +1,7 @@
-You are a semantic search assistant for command history.
-Analyze the user's query and the command history.
-Find the indices (0-based) of the most relevant commands.
-
-QUERY:
-{{ query }}
-
-HISTORY:
-{% for entry in history %}
-{{ loop.index0 }}. {{ entry.command }}
+Find the most relevant commands from the history for the query: '{{ query }}'.
+History:
+{% for item in history %}
+{{ loop.index0 }}. {{ item.command }}
 {% endfor %}
 
-OUTPUT FORMAT:
-Return ONLY valid JSON:
-{
-  "indices": [0, 2]
-}
+Return JSON: {'indices': [0, 2]}

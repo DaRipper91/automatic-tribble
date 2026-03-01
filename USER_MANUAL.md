@@ -99,6 +99,11 @@ User Mode is a dual-pane file manager designed for speed and keyboard efficiency
 
 AI Mode uses natural language processing to understand your intent and execute complex file operations automatically.
 
+### New Features & Improvements
+- **Dry-Run Default**: All file operations are simulated first. Changes are shown in color (Red for delete, Yellow for move/rename) before execution.
+- **Robust Validation**: The AI validates its own plans and retries automatically if it makes a syntax error.
+- **Context Awareness**: The AI sees a summary of your directory, including the largest files and potential duplicate groups.
+
 ### How to Use
 1.  **Select Target Directory**: Enter the path where you want operations to happen (default is current directory).
 2.  **Enter Command**: Type what you want to do in plain English.
@@ -111,7 +116,7 @@ AI Mode uses natural language processing to understand your intent and execute c
 
 ### Command History
 - Use `Up` / `Down` arrows in the input box to cycle through previous commands.
-- Click **Search History** to find past commands.
+- Click **Search History** to find past commands using AI semantic search.
 
 ### ✨ Quick Actions
 The left panel provides buttons for common tasks:
@@ -197,6 +202,9 @@ tfm-auto tags --list
 # Find files by tag
 tfm-auto tags --search important
 
+# Export all tags to JSON (NEW)
+tfm-auto tags --export
+
 # Remove a tag
 tfm-auto tags --remove ./document.pdf important
 ```
@@ -210,6 +218,9 @@ tfm-auto schedule --list
 # Add a job (e.g., organize downloads daily at midnight)
 # Note: Params must be valid JSON
 tfm-auto schedule --add "daily_org" "0 0 * * *" "organize_by_type" '{"source": "/home/user/Downloads", "target": "/home/user/Sorted"}'
+
+# Run a job immediately (NEW)
+tfm-auto schedule --run-now "daily_org"
 
 # Remove a job
 tfm-auto schedule --remove "daily_org"

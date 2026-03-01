@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal, Vertical
-from textual.widgets import Header, Footer, Button, Label, Input, RichLog, Checkbox
+from textual.widgets import Header, Footer, Button, Label, Input, RichLog
 from textual.screen import Screen
 from textual.binding import Binding
 from textual import work
@@ -66,11 +66,6 @@ class AIModeScreen(Screen):
         height: auto;
         margin-bottom: 1;
     }
-
-    #history-container {
-        height: auto;
-        margin-bottom: 1;
-    }
     """
 
     BINDINGS = [
@@ -107,6 +102,7 @@ class AIModeScreen(Screen):
         self.history.append(entry)
         path = Path.home() / ".tfm" / "command_history.json"
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w") as f:
                 json.dump(self.history, f, indent=2)
         except Exception:
@@ -119,12 +115,14 @@ class AIModeScreen(Screen):
             self.history_index += 1
             cmd = self.history[-(self.history_index+1)]["command"]
             self.query_one("#command_input", Input).value = cmd
+            self.query_one("#command_input", Input).cursor_position = len(cmd)
 
     def action_history_down(self):
         if self.history_index > 0:
             self.history_index -= 1
             cmd = self.history[-(self.history_index+1)]["command"]
             self.query_one("#command_input", Input).value = cmd
+            self.query_one("#command_input", Input).cursor_position = len(cmd)
         elif self.history_index == 0:
             self.history_index = -1
             self.query_one("#command_input", Input).value = ""
@@ -142,9 +140,6 @@ class AIModeScreen(Screen):
                     yield Button("Cleanup Old Files", id="btn_cleanup", classes="action-btn")
                     yield Button("Find Duplicates", id="btn_duplicates", classes="action-btn")
                     yield Button("Batch Rename", id="btn_rename", classes="action-btn")
-
-                    yield Label("Settings", classes="section-title")
-                    yield Checkbox("Enable Dry Run", value=True, id="chk_dry_run")
 
                 # Right Panel: Interaction
                 with Vertical(id="right-panel"):
@@ -219,9 +214,6 @@ class AIModeScreen(Screen):
         """Generate a plan in background."""
         self.app.call_from_thread(self._log_message, f"[dim]Thinking... Context: {target_path}[/]")
 
-        # Check dry run toggle
-        is_dry_run_enabled = self.query_one("#chk_dry_run", Checkbox).value
-
         try:
             plan_data = self.gemini_client.generate_plan(command, target_path)
             self.current_plan = plan_data.get("plan", [])
@@ -236,40 +228,44 @@ class AIModeScreen(Screen):
                 icon = "🗑️" if step.get("is_destructive") else "📝"
                 msg += f"{step['step']}. {icon} [bold]{step['action']}[/]: {step['description']}\n"
 
+            # Dry Run Simulation
+            msg += "\n[bold cyan]Dry Run Simulation:[/bold cyan]\n"
             self.app.call_from_thread(self._log_message, msg)
 
-            if is_dry_run_enabled:
-                # Dry Run Simulation
-                dry_msg = "\n[bold cyan]Dry Run Simulation (Safety Check):[/bold cyan]\n"
+            # Use a fresh event loop for this thread to avoid "running loop" errors with asyncio.run
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            try:
                 for step in self.current_plan:
                      # Running dry run for each step to get prediction
                      try:
-                         res = asyncio.run(self.gemini_client.execute_plan_step(step, dry_run=True))
-                         if "delete" in res.lower() or "remove" in res.lower():
+                         res = loop.run_until_complete(self.gemini_client.execute_plan_step(step, dry_run=True))
+
+                         # Determine color based on action/result keywords
+                         color = "green" # Default safe
+                         res_lower = res.lower()
+
+                         if "delete" in res_lower or "remove" in res_lower:
                              color = "red"
-                         elif "move" in res.lower() or "rename" in res.lower() or "organize" in res.lower():
+                         elif "move" in res_lower or "rename" in res_lower or "organize" in res_lower:
                              color = "yellow"
-                         elif "add" in res.lower() or "create" in res.lower():
-                             color = "green"
-                         else:
-                             color = "white"
-                         dry_msg += f"  Step {step['step']}: [{color}]{res}[/{color}]\n"
+
+                         # Explicitly format the simulation output
+                         sim_msg = f"  Step {step['step']}: [{color}]{res}[/{color}]"
+                         self.app.call_from_thread(self._log_message, sim_msg)
                      except Exception as e:
-                         dry_msg += f"  Step {step['step']}: [red]Simulation failed: {e}[/]\n"
+                         self.app.call_from_thread(self._log_message, f"  Step {step['step']}: [red]Simulation failed: {e}[/]")
+            finally:
+                loop.close()
 
-                self.app.call_from_thread(self._log_message, dry_msg)
-
-                # Trigger confirmation flow
-                self.app.call_from_thread(self._request_confirmation, command, "Confirm Execution")
-            else:
-                # Direct confirmation if dry run disabled (still ask, but warn)
-                self.app.call_from_thread(self._log_message, "[bold red]Warning: Dry Run is disabled.[/]")
-                self.app.call_from_thread(self._request_confirmation, command, "Execute Immediately?")
+            # Trigger confirmation flow
+            self.app.call_from_thread(self._request_confirmation, command)
 
         except Exception as e:
              self.app.call_from_thread(self._log_message, f"[bold red]Error generating plan:[/bold red] {e}")
 
-    def _request_confirmation(self, command: str, title: str) -> None:
+    def _request_confirmation(self, command: str) -> None:
         """Ask user to confirm execution."""
         def check_confirm(confirmed: Optional[bool]) -> None:
             if confirmed:
@@ -281,8 +277,8 @@ class AIModeScreen(Screen):
 
         self.app.push_screen(
             ConfirmationScreen(
-                title,
-                confirm_label="Yes, Execute",
+                "Execute this plan?",
+                confirm_label="Confirm & Execute",
                 confirm_variant="success"
             ),
             check_confirm
@@ -296,15 +292,22 @@ class AIModeScreen(Screen):
 
         self.app.call_from_thread(self._log_message, "[bold]Executing Plan...[/]")
 
-        for step in self.current_plan:
-            try:
-                # Real execution (dry_run=False)
-                result = asyncio.run(self.gemini_client.execute_plan_step(step, dry_run=False))
-                self.app.call_from_thread(self._log_message, f"[green]✔ Step {step['step']}: {result}[/]")
-            except Exception as e:
-                self.app.call_from_thread(self._log_message, f"[red]✖ Step {step['step']} Failed: {e}[/]")
-                self.app.call_from_thread(self._log_message, "[bold red]Execution aborted.[/]")
-                return
+        # Use a fresh event loop for this thread
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            for step in self.current_plan:
+                try:
+                    # Real execution (dry_run=False)
+                    result = loop.run_until_complete(self.gemini_client.execute_plan_step(step, dry_run=False))
+                    self.app.call_from_thread(self._log_message, f"[green]✔ Step {step['step']}: {result}[/]")
+                except Exception as e:
+                    self.app.call_from_thread(self._log_message, f"[red]✖ Step {step['step']} Failed: {e}[/]")
+                    self.app.call_from_thread(self._log_message, "[bold red]Execution aborted.[/]")
+                    return
+        finally:
+            loop.close()
 
         self.app.call_from_thread(self._log_message, "[bold green]Plan completed successfully.[/]")
 

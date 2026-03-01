@@ -1,5 +1,5 @@
 """
-JSON Schemas for AI Integration.
+JSON Schemas for AI Responses.
 """
 
 PLAN_SCHEMA = {
@@ -16,7 +16,7 @@ PLAN_SCHEMA = {
                     "description": {"type": "string"},
                     "is_destructive": {"type": "boolean"}
                 },
-                "required": ["step", "action", "params", "description", "is_destructive"]
+                "required": ["step", "action", "params", "description"]
             }
         }
     },
@@ -42,15 +42,4 @@ TAGS_SCHEMA = {
         }
     },
     "required": ["suggestions"]
-}
-
-SEMANTIC_SEARCH_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "indices": {
-            "type": "array",
-            "items": {"type": "integer"}
-        }
-    },
-    "required": ["indices"]
 }

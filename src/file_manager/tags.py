@@ -131,6 +131,23 @@ class TagManager:
             logger.error(f"Failed to list tags: {e}")
             return []
 
+    def export_tags(self) -> Dict[str, List[str]]:
+        """Export all tags to a dictionary {file_path: [tags]}."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT file_path, tag FROM tags ORDER BY file_path")
+
+                result = {}
+                for file_path, tag in cursor.fetchall():
+                    if file_path not in result:
+                        result[file_path] = []
+                    result[file_path].append(tag)
+                return result
+        except sqlite3.Error as e:
+            logger.error(f"Failed to export tags: {e}")
+            return {}
+
     def cleanup_missing_files(self) -> int:
         """Remove entries for files that no longer exist."""
         removed_count = 0
