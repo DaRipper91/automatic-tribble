@@ -3,7 +3,6 @@ Task Scheduler for File Manager Automation.
 """
 
 import json
-import time
 import logging
 import asyncio
 from pathlib import Path
@@ -12,7 +11,6 @@ from datetime import datetime
 from croniter import croniter
 
 from .automation import FileOrganizer
-from .config import ConfigManager
 
 logger = logging.getLogger(__name__)
 

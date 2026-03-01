@@ -40,3 +40,5 @@ Thumbs.db
 repomix-context.xml
 repomix-output.json
 repomix-output.md
+.mypy_cache/
+.mypy_cache/

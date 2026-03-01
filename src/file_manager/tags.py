@@ -5,7 +5,7 @@ Tagging system for File Manager.
 import sqlite3
 import logging
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
