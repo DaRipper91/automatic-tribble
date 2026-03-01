@@ -1,24 +1,13 @@
-Screen {
-    background: #002b36;
-    color: #839496;
-    scrollbar-color: #586e75;
-    scrollbar-color-hover: #93a1a1;
-    scrollbar-color-active: #268bd2;
-    scrollbar-background: #002b36;
-}
-
-$surface: #073642;
-$surface-lighten-1: #002b36;
-$surface-lighten-2: #586e75;
-$background: #002b36;
+/* Solarized Theme */
+$surface: #002b36;
 $panel: #073642;
-$boost: #073642;
+$background: #002b36;
 $primary: #268bd2;
 $secondary: #586e75;
 $accent: #2aa198;
+$text: #839496;
+$text-muted: #657b83;
 $success: #859900;
 $warning: #b58900;
 $error: #dc322f;
-$text: #839496;
-$text-muted: #586e75;
-$text-disabled: #073642;
+$boost: #073642;

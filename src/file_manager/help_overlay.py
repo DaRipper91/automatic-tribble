@@ -1,33 +1,76 @@
-from textual.screen import ModalScreen
-from textual.widgets import Label, Input, Button
-from textual.containers import Container, Vertical, Horizontal
+"""
+Help Overlay Screen
+"""
 from textual.app import ComposeResult
+from textual.screen import ModalScreen
+from textual.widgets import Input, Label
+from textual.containers import Vertical, Horizontal
 from textual.binding import Binding
 
+class ShortcutRow(Horizontal):
+    """Row displaying a shortcut."""
+
+    DEFAULT_CLASSES = "shortcut-row"
+
+    def __init__(self, key: str, desc: str):
+        super().__init__()
+        self.key_text = key
+        self.desc_text = desc
+
+    def compose(self) -> ComposeResult:
+        with Horizontal(classes="key-badge-container"):
+             yield Label(self.key_text, classes="key-badge")
+        yield Label(self.desc_text, classes="action-desc")
+
+
+class CategoryWidget(Vertical):
+    """Widget for a shortcut category."""
+
+    DEFAULT_CLASSES = "category-box"
+
+    def __init__(self, title: str, shortcuts: list):
+        super().__init__()
+        self.category_title = title
+        self.shortcuts = shortcuts
+
+    def compose(self) -> ComposeResult:
+        yield Label(self.category_title, classes="category-title")
+        for key, desc in self.shortcuts:
+             yield ShortcutRow(key, desc)
+
+
 class HelpOverlay(ModalScreen):
-    """A searchable help overlay showing keyboard shortcuts."""
+    """A full-screen help overlay with search."""
 
     CSS = """
     HelpOverlay {
         align: center middle;
-        background: $background 80%;
+        background: $surface 90%;
     }
 
-    #help-container {
+    #help-dialog {
         width: 80%;
         height: 80%;
-        background: $surface;
+        background: $panel;
         border: thick $primary;
         padding: 1;
-        opacity: 0.0; /* Start invisible for animation */
     }
 
-    #search-box {
-        dock: top;
+    .title {
+        text-align: center;
+        text-style: bold;
         margin-bottom: 1;
+        width: 100%;
+        background: $boost;
+        padding: 1;
     }
 
-    #shortcuts-content {
+    #search-bar {
+        margin-bottom: 1;
+        dock: top;
+    }
+
+    #categories-container {
         height: 1fr;
         overflow-y: auto;
     }
@@ -37,6 +80,7 @@ class HelpOverlay(ModalScreen):
         border: solid $secondary;
         padding: 1;
         margin-bottom: 1;
+        background: $surface;
     }
 
     .category-title {
@@ -48,120 +92,109 @@ class HelpOverlay(ModalScreen):
     }
 
     .shortcut-row {
-        height: auto;
-        layout: horizontal;
+        height: 3;
+        margin-bottom: 0;
         padding: 0 1;
-        margin-top: 1;
+    }
+
+    .key-badge-container {
+        width: 25;
+        content-align: right middle;
     }
 
     .key-badge {
         background: $primary;
         color: $text;
-        padding: 0 1;
         text-style: bold;
-        width: 20%;
-        text-align: center;
     }
 
-    .description {
-        width: 80%;
+    .action-desc {
+        color: $text-muted;
+        width: 1fr;
         padding-left: 2;
-        color: $text;
+        content-align: left middle;
     }
 
-    #footer {
-        dock: bottom;
-        height: auto;
-        align: center bottom;
+    .footer-tip {
+        text-align: center;
+        color: $text-muted;
         margin-top: 1;
+        dock: bottom;
     }
     """
 
     BINDINGS = [
-        Binding("escape", "dismiss", "Close"),
+        Binding("escape", "dismiss", "Close Help"),
+        Binding("h", "dismiss", "Close Help"),
     ]
 
     SHORTCUTS = {
         "Navigation": [
-            ("Up/Down", "Move cursor"),
-            ("Enter", "Open directory"),
-            ("Tab", "Switch Panel"),
-            ("Ctrl+T", "New Tab"),
-            ("Ctrl+W", "Close Tab"),
-            ("Ctrl+Tab", "Next Tab"),
-            ("Esc", "Back / Cancel"),
+            ("↑/↓", "Move cursor"),
+            ("Enter", "Open directory / Select"),
+            ("Tab", "Switch panel"),
+            ("Ctrl+Tab", "Next tab"),
+            ("Ctrl+T", "New tab"),
+            ("Ctrl+W", "Close tab"),
+            ("Esc", "Go up / Back"),
         ],
         "File Operations": [
-            ("Space", "Toggle Selection"),
-            ("Shift+Up/Down", "Range Selection"),
-            ("Ctrl+A", "Select All"),
-            ("Ctrl+D", "Deselect All"),
             ("c", "Copy selected"),
             ("m", "Move selected"),
             ("d", "Delete selected"),
-            ("r", "Rename"),
-            ("n", "New Directory"),
+            ("n", "New directory"),
+            ("r", "Rename selected"),
+        ],
+        "Selection": [
+            ("Space", "Toggle selection"),
+            ("Shift+↑/↓", "Range selection"),
+            ("Ctrl+A", "Select all"),
+            ("Ctrl+D", "Deselect all"),
         ],
         "View": [
-            ("p", "Toggle Preview Pane"),
-            ("ctrl+r", "Refresh"),
-            ("h", "Toggle Help"),
+            ("p", "Toggle preview pane"),
+            ("h", "Toggle help"),
+            ("Ctrl+R", "Refresh view"),
+            ("Ctrl+Shift+T", "Switch theme"),
+        ],
+        "AI Mode": [
+            ("Ctrl+Space", "Open AI prompt"),
         ],
         "General": [
-            ("q", "Quit"),
+            ("q", "Quit application"),
         ]
     }
 
     def compose(self) -> ComposeResult:
-        with Container(id="help-container"):
-            yield Label("Keyboard Shortcuts", classes="category-title")
-            yield Input(placeholder="Search shortcuts...", id="search-box")
-
-            with Vertical(id="shortcuts-content"):
-                # Content populated in on_mount
-                pass
-
-            with Horizontal(id="footer"):
-                yield Button("Close", variant="primary", id="close-btn")
+        with Vertical(id="help-dialog"):
+            yield Label("Keyboard Shortcuts", classes="title")
+            yield Input(placeholder="Search shortcuts...", id="search-bar")
+            with Vertical(id="categories-container"):
+                pass # Dynamic content populated in on_mount
+            yield Label("Press Esc or h to close", classes="footer-tip")
 
     def on_mount(self) -> None:
-        container = self.query_one("#shortcuts-content", Vertical)
-        self._populate_shortcuts(container, "")
+        self.refresh_shortcuts()
 
-        # Animation
-        main_container = self.query_one("#help-container")
-        main_container.styles.animate("opacity", 1.0, duration=0.2)
+    def refresh_shortcuts(self, query: str = "") -> None:
+        container = self.query_one("#categories-container")
+        container.remove_children()
+
+        for category, shortcuts in self.SHORTCUTS.items():
+            if query and query in category.lower():
+                # Show all if category matches
+                container.mount(CategoryWidget(category, shortcuts))
+                continue
+
+            # Filter shortcuts
+            filtered = [
+                (k, d) for k, d in shortcuts
+                if not query or query in k.lower() or query in d.lower()
+            ]
+
+            if filtered:
+                container.mount(CategoryWidget(category, filtered))
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        container = self.query_one("#shortcuts-content", Vertical)
-        container.remove_children()
-        self._populate_shortcuts(container, event.value)
-
-    def _populate_shortcuts(self, container: Vertical, query: str) -> None:
-        query = query.lower()
-        has_results = False
-
-        for category, items in self.SHORTCUTS.items():
-            filtered_items = []
-            for key, desc in items:
-                if query in key.lower() or query in desc.lower() or query in category.lower():
-                    filtered_items.append((key, desc))
-
-            if filtered_items:
-                has_results = True
-                cat_box = Vertical(classes="category-box")
-                cat_box.mount(Label(category, classes="category-title"))
-
-                for key, desc in filtered_items:
-                    row = Horizontal(classes="shortcut-row")
-                    row.mount(Label(key, classes="key-badge"))
-                    row.mount(Label(desc, classes="description"))
-                    cat_box.mount(row)
-
-                container.mount(cat_box)
-
-        if not has_results:
-             container.mount(Label("No shortcuts found.", classes="description"))
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.dismiss()
+        """Filter shortcuts based on search."""
+        self.refresh_shortcuts(event.value.lower())

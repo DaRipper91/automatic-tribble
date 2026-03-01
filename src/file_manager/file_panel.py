@@ -1,121 +1,13 @@
 """
-File panel widget for displaying and navigating files with multi-selection.
+File panel widget for displaying and navigating files.
 """
 
 from pathlib import Path
 from typing import Optional, Set
-from textual.widgets import DirectoryTree, Static
+from textual.widgets import Static
 from textual.containers import Vertical, Container
 from textual.reactive import reactive
-from textual.binding import Binding
-from textual.message import Message
-from rich.text import Text
-from rich.style import Style
-
-class MultiSelectDirectoryTree(DirectoryTree):
-    """DirectoryTree with multi-selection support."""
-
-    class SelectionChanged(Message):
-        """Emitted when selection changes."""
-        def __init__(self, tree: "MultiSelectDirectoryTree"):
-            self.tree = tree
-            super().__init__()
-
-    BINDINGS = [
-        Binding("space", "toggle_selection", "Toggle Selection"),
-        Binding("shift+down", "select_down", "Select Down", show=False),
-        Binding("shift+up", "select_up", "Select Up", show=False),
-        Binding("ctrl+a", "select_all", "Select All"),
-        Binding("ctrl+d", "deselect_all", "Deselect All"),
-    ]
-
-    def __init__(self, path: str, **kwargs):
-        super().__init__(path, **kwargs)
-        self.selected_paths: Set[Path] = set()
-
-    def on_mount(self) -> None:
-        super().on_mount()
-
-    def action_toggle_selection(self) -> None:
-        node = self.cursor_node
-        if not node: return
-
-        # Determine path from node data
-        if not node.data or not hasattr(node.data, 'path'):
-            return
-
-        path = Path(node.data.path)
-        if path in self.selected_paths:
-            self.selected_paths.remove(path)
-            self._update_node_visual(node, selected=False)
-        else:
-            self.selected_paths.add(path)
-            self._update_node_visual(node, selected=True)
-
-        self.post_message(self.SelectionChanged(self))
-
-    def action_select_down(self) -> None:
-        self.action_cursor_down()
-        self._select_current_node()
-
-    def action_select_up(self) -> None:
-        self.action_cursor_up()
-        self._select_current_node()
-
-    def _select_current_node(self) -> None:
-        node = self.cursor_node
-        if node and node.data and hasattr(node.data, 'path'):
-            path = Path(node.data.path)
-            self.selected_paths.add(path)
-            self._update_node_visual(node, selected=True)
-            self.post_message(self.SelectionChanged(self))
-
-    def action_select_all(self) -> None:
-        # Select all siblings of current node (or all visible nodes if possible)
-        # We'll target siblings of cursor for simplicity, or children of root if at root.
-        node = self.cursor_node
-        if not node:
-             # Fallback to root children
-             node = self.root
-
-        parent = node.parent
-        # If node is root (which shouldn't happen for cursor usually unless empty), use it
-        if not parent:
-            target_nodes = node.children
-        else:
-            target_nodes = parent.children
-
-        for child in target_nodes:
-            if child.data and hasattr(child.data, 'path'):
-                path = Path(child.data.path)
-                self.selected_paths.add(path)
-                self._update_node_visual(child, selected=True)
-
-        self.post_message(self.SelectionChanged(self))
-
-    def action_deselect_all(self) -> None:
-        self.selected_paths.clear()
-        self.reload()
-        self.post_message(self.SelectionChanged(self))
-
-    def _update_node_visual(self, node, selected: bool) -> None:
-        label = node.label
-        # Textual DirectoryTree labels are typically simple strings or Text objects.
-        # We need to preserve the original text but change style.
-
-        # Check if we have cached original label (not standard, but we can try to guess)
-        # Or just toggle style.
-
-        current_text = str(label)
-
-        if selected:
-            # Apply highlight style
-            new_label = Text(current_text, style="bold blue reverse")
-        else:
-            # Revert to default (empty style or just string)
-            new_label = Text(current_text)
-
-        node.set_label(new_label)
+from .ui_components import MultiSelectDirectoryTree
 
 
 class FilePanel(Container):
@@ -169,23 +61,14 @@ class FilePanel(Container):
         self._tree = self.query_one(MultiSelectDirectoryTree)
         self._update_header()
     
-    def on_directory_tree_directory_selected(self, event: DirectoryTree.DirectorySelected) -> None:
+    def on_directory_tree_directory_selected(self, event: MultiSelectDirectoryTree.DirectorySelected) -> None:
         """Handle directory selection."""
-        # Clear selection on navigation
-        if self._tree:
-            self._tree.selected_paths.clear()
-            self._tree.post_message(MultiSelectDirectoryTree.SelectionChanged(self._tree))
-
-            # Animate transition
-            self._tree.styles.opacity = 0.0
-            self._tree.styles.animate("opacity", 1.0, duration=0.2)
-
         self.current_dir = Path(event.path)
         self._update_header()
     
     def get_selected_path(self) -> Optional[Path]:
         """
-        Get the currently selected file or directory path (cursor).
+        Get the currently cursor-selected file or directory path.
         
         Returns:
             Path object of selected item, or None if nothing selected
@@ -196,26 +79,15 @@ class FilePanel(Container):
                 return Path(node.data.path)
         return None
 
-    def get_selected_paths(self) -> Set[Path]:
-        """
-        Get the set of selected paths.
-        If selection is empty, returns set containing cursor path (if any).
-        """
+    def get_marked_paths(self) -> Set[Path]:
+        """Get the set of multi-selected paths."""
         if self._tree:
-            if self._tree.selected_paths:
-                return self._tree.selected_paths.copy()
-
-            # Fallback to cursor
-            cursor = self.get_selected_path()
-            if cursor:
-                return {cursor}
+            return self._tree.get_selected_paths()
         return set()
     
     def refresh_view(self) -> None:
         """Refresh the directory tree view."""
         if self._tree:
-            self._tree.selected_paths.clear() # Clear selection on refresh
-            self._tree.post_message(MultiSelectDirectoryTree.SelectionChanged(self._tree))
             self._tree.reload()
             self._update_header()
     
@@ -234,8 +106,6 @@ class FilePanel(Container):
         if path.exists() and path.is_dir():
             self.current_dir = path
             if self._tree:
-                self._tree.selected_paths.clear()
-                self._tree.post_message(MultiSelectDirectoryTree.SelectionChanged(self._tree))
                 self._tree.path = str(path)
-                self._tree.reload()
+                # self._tree.reload() # DirectoryTree automatically reloads on path change usually
             self._update_header()
