@@ -5,7 +5,7 @@ Screens for the file manager application.
 from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar
+from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar, OptionList
 from textual.containers import Container, Horizontal, Vertical
 from textual.binding import Binding
 
@@ -451,6 +451,11 @@ class ConfirmationScreen(ModalScreen[bool]):
                 # ignore type error for variant string, as it is dynamically passed but safe
                 yield Button(self.confirm_label, variant=self.confirm_variant, id="confirm")  # type: ignore
 
+    def on_mount(self) -> None:
+        container = self.query_one("#dialog")
+        container.styles.opacity = 0.0
+        container.styles.animate("opacity", 1.0, duration=0.2)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":
             self.dismiss(True)
@@ -543,6 +548,93 @@ class HelpScreen(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss()
 
+class ThemeSwitcher(ModalScreen[Optional[str]]):
+    """Screen to switch themes with live preview."""
+
+    CSS = """
+    ThemeSwitcher {
+        align: center middle;
+        background: $background 80%;
+    }
+    #theme-dialog {
+        width: 40;
+        height: auto;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
+    .title {
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 1;
+        width: 100%;
+    }
+    OptionList {
+        height: auto;
+        max-height: 10;
+        border: solid $secondary;
+        margin-bottom: 1;
+    }
+    #buttons {
+        height: auto;
+        width: 100%;
+        align: center bottom;
+    }
+    Button {
+        margin: 0 1;
+        width: 1fr;
+    }
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, current_theme: str):
+        super().__init__()
+        self.original_theme = current_theme
+        self.themes = ["dark", "light", "solarized", "dracula"]
+
+    def compose(self) -> ComposeResult:
+        with Container(id="theme-dialog"):
+            yield Label("Select Theme", classes="title")
+            yield OptionList(*self.themes, id="theme-list")
+            with Horizontal(id="buttons"):
+                yield Button("Cancel", variant="error", id="cancel")
+                yield Button("Apply", variant="success", id="apply")
+
+    def on_mount(self) -> None:
+        container = self.query_one("#theme-dialog")
+        container.styles.opacity = 0.0
+        container.animate("opacity", 1.0, duration=0.2)
+
+        option_list = self.query_one(OptionList)
+        try:
+            index = self.themes.index(self.original_theme)
+            option_list.highlighted = index
+        except ValueError:
+            pass
+
+    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+        theme = str(event.option.prompt)
+        if hasattr(self.app, "load_theme_by_name"):
+            self.app.load_theme_by_name(theme)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "apply":
+            option_list = self.query_one(OptionList)
+            if option_list.highlighted is not None:
+                selected_theme = self.themes[option_list.highlighted]
+                self.dismiss(selected_theme)
+            else:
+                self.action_cancel()
+        else:
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        # Revert
+        if hasattr(self.app, "load_theme_by_name"):
+            self.app.load_theme_by_name(self.original_theme)
+        self.dismiss(None)
+
 
 class InputScreen(ModalScreen[str]):
     """Screen for getting text input from the user."""
@@ -613,6 +705,11 @@ class InputScreen(ModalScreen[str]):
             with Horizontal(id="buttons"):
                 yield Button("Cancel", variant="primary", id="cancel")
                 yield Button("OK", variant="success", id="ok")
+
+    def on_mount(self) -> None:
+        container = self.query_one("#input-dialog")
+        container.styles.opacity = 0.0
+        container.styles.animate("opacity", 1.0, duration=0.2)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "ok":

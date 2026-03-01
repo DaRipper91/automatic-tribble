@@ -32,6 +32,7 @@ class ConfigManager:
             config_dir = Path.home() / ".tfm"
         self.config_dir = config_dir
         self.categories_file = self.config_dir / "categories.yaml"
+        self.config_file = self.config_dir / "config.yaml"
         self._ensure_config_dir()
 
     def _ensure_config_dir(self) -> None:
@@ -74,6 +75,76 @@ class ConfigManager:
                 yaml.dump(categories, f, default_flow_style=False)
         except OSError as e:
             logger.error(f"Error saving categories config: {e}")
+
+    def load_config(self) -> Dict:
+        """Load general application configuration."""
+        if not self.config_file.exists():
+            default_config = {'theme': 'dark'}
+            self.save_config(default_config)
+            return default_config
+
+        try:
+            with open(self.config_file, 'r') as f:
+                config = yaml.safe_load(f)
+
+            if not isinstance(config, dict):
+                return {'theme': 'dark'}
+
+            return config
+        except (yaml.YAMLError, OSError) as e:
+            logger.error(f"Error loading config: {e}")
+            return {'theme': 'dark'}
+
+    def save_config(self, config: Dict) -> None:
+        """Save general application configuration."""
+        try:
+            self._ensure_config_dir()
+            with open(self.config_file, 'w') as f:
+                yaml.dump(config, f, default_flow_style=False)
+        except OSError as e:
+            logger.error(f"Error saving config: {e}")
+
+    def get_theme(self) -> str:
+        """Get the configured theme name."""
+        return self.load_config().get('theme', 'dark')
+
+    def set_theme(self, theme_name: str) -> None:
+        """Set the theme."""
+        config = self.load_config()
+        config['theme'] = theme_name
+        self.save_config(config)
+
+    def load_recent_dirs(self) -> List[str]:
+        """Load recent directories."""
+        recent_file = self.config_dir / "recent.json"
+        if not recent_file.exists():
+            return []
+        try:
+            import json
+            with open(recent_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            logger.error(f"Error loading recent dirs: {e}")
+            return []
+
+    def save_recent_dirs(self, dirs: List[str]) -> None:
+        """Save recent directories."""
+        recent_file = self.config_dir / "recent.json"
+        try:
+            self._ensure_config_dir()
+            import json
+            with open(recent_file, 'w') as f:
+                json.dump(dirs, f)
+        except Exception as e:
+            logger.error(f"Error saving recent dirs: {e}")
+
+    def add_recent_dir(self, path: str) -> None:
+        """Add a directory to recent list (maintaining max 5)."""
+        recents = self.load_recent_dirs()
+        if path in recents:
+            recents.remove(path)
+        recents.insert(0, path)
+        self.save_recent_dirs(recents[:5])
 
     def get_config_path(self) -> Path:
         return self.categories_file
