@@ -16,6 +16,9 @@ from textual import work
 
 from .ai_integration import GeminiClient
 from .screens import ConfirmationScreen
+from .logger import get_logger
+
+logger = get_logger("ai_mode")
 
 
 class AIModeScreen(Screen):
@@ -88,7 +91,8 @@ class AIModeScreen(Screen):
             try:
                 with open(path, "r") as f:
                     return json.load(f)
-            except Exception:
+            except (json.JSONDecodeError, OSError) as e:
+                logger.error(f"Failed to read command history: {e}")
                 return []
         return []
 
@@ -104,8 +108,8 @@ class AIModeScreen(Screen):
         try:
             with open(path, "w") as f:
                 json.dump(self.history, f, indent=2)
-        except Exception:
-            pass
+        except OSError as e:
+            logger.error(f"Failed to save command history: {e}")
 
     def action_history_up(self):
         if not self.history:
@@ -316,12 +320,15 @@ class AIModeScreen(Screen):
         try:
             for p in self.current_dir.iterdir():
                 if p.is_file():
-                    files.append({
-                        "name": p.name,
-                        "size_human": str(p.stat().st_size)
-                    })
-        except Exception:
-            pass
+                    try:
+                        files.append({
+                            "name": p.name,
+                            "size_human": str(p.stat().st_size)
+                        })
+                    except OSError:
+                        pass
+        except OSError as e:
+            logger.error(f"Failed to list directory for tagging: {e}")
 
         if not files:
             self.app.call_from_thread(self._log_message, "[red]No files found to tag.[/]")

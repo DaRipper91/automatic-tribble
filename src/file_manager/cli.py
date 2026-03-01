@@ -63,7 +63,7 @@ def setup_parser():
     dup = subparsers.add_parser('duplicates', help='Find duplicate files')
     dup.add_argument('--dir', required=True, help='Directory to search')
     dup.add_argument('--recursive', action='store_true', default=True, help='Search recursively')
-    dup.add_argument('--resolve', choices=['newest', 'oldest', 'interactive'], help='Resolve duplicates strategy')
+    dup.add_argument('--resolve', choices=['newest', 'oldest', 'largest', 'smallest', 'interactive'], help='Resolve duplicates strategy')
     
     # Cleanup command
     cleanup = subparsers.add_parser('cleanup', help='Clean up old files')
@@ -210,6 +210,10 @@ async def handle_duplicates(args):
             strategy = ConflictResolutionStrategy.KEEP_NEWEST
         elif args.resolve == 'oldest':
             strategy = ConflictResolutionStrategy.KEEP_OLDEST
+        elif args.resolve == 'largest':
+            strategy = ConflictResolutionStrategy.KEEP_LARGEST
+        elif args.resolve == 'smallest':
+            strategy = ConflictResolutionStrategy.KEEP_SMALLEST
 
         if strategy == ConflictResolutionStrategy.INTERACTIVE:
              if args.json:
@@ -217,7 +221,15 @@ async def handle_duplicates(args):
              else:
                  console.print("Interactive mode not supported in CLI.")
         else:
-             deleted = await organizer.resolve_duplicates(duplicates, strategy, progress_queue)
+             task = asyncio.create_task(organizer.resolve_duplicates(duplicates, strategy, progress_queue))
+             if progress_queue:
+                 monitor_task = asyncio.create_task(monitor_progress(progress_queue, "Resolving duplicates..."))
+                 deleted = await task
+                 await progress_queue.put(None)
+                 await monitor_task
+             else:
+                 deleted = await task
+
              if args.json:
                  print(json.dumps({"deleted": [str(p) for p in deleted]}, indent=2))
              else:
@@ -333,7 +345,7 @@ async def handle_tags(args):
         if manager.add_tag(path, tag):
             console.print(f"[green]Added tag '{tag}' to {path}[/]")
         else:
-            console.print(f"[red]Failed to add tag.[/]")
+            console.print("[red]Failed to add tag.[/]")
 
     elif args.remove:
         path = Path(args.remove[0])
@@ -341,7 +353,7 @@ async def handle_tags(args):
         if manager.remove_tag(path, tag):
              console.print(f"[green]Removed tag '{tag}' from {path}[/]")
         else:
-             console.print(f"[yellow]Tag not found.[/]")
+             console.print("[yellow]Tag not found.[/]")
 
     elif args.list:
         tags = manager.list_all_tags()

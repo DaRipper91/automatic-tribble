@@ -5,7 +5,7 @@ Directory Context Builder for AI Prompts.
 import os
 import time
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any
 from dataclasses import dataclass, asdict
 
 @dataclass
@@ -90,7 +90,7 @@ class DirectoryContextBuilder:
             newest_file=newest_name
         )
 
-    def _human_size(self, size: int) -> str:
+    def _human_size(self, size: float) -> str:
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
             if size < 1024.0:
                 return f"{size:.1f} {unit}"

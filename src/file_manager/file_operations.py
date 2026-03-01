@@ -15,6 +15,7 @@ from .utils import recursive_scan
 from .logger import get_logger
 from .exceptions import TFMPermissionError, TFMPathNotFoundError, TFMOperationConflictError
 from .plugins.registry import PluginRegistry
+import json
 
 logger = get_logger("file_ops")
 
@@ -33,34 +34,79 @@ class FileOperation:
     timestamp: datetime = field(default_factory=datetime.now)
     trash_path: Optional[Path] = None
 
+    def to_dict(self) -> dict:
+        return {
+            "type": self.type.name,
+            "original_path": str(self.original_path),
+            "target_path": str(self.target_path) if self.target_path else None,
+            "timestamp": self.timestamp.isoformat(),
+            "trash_path": str(self.trash_path) if self.trash_path else None,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> 'FileOperation':
+        return cls(
+            type=OperationType[data["type"]],
+            original_path=Path(data["original_path"]),
+            target_path=Path(data["target_path"]) if data.get("target_path") else None,
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            trash_path=Path(data["trash_path"]) if data.get("trash_path") else None,
+        )
+
 class OperationHistory:
     """Tracks destructive operations and supports undo/redo."""
 
     def __init__(self):
         self._undo_stack: List[FileOperation] = []
         self._redo_stack: List[FileOperation] = []
-        self.history_file = Path.home() / ".tfm" / "history.pkl"
+        self.history_file = Path.home() / ".tfm" / "history.json"
+        self._cleanup_old_history()
         self._load()
+
+    def _cleanup_old_history(self):
+        old_file = Path.home() / ".tfm" / "history.pkl"
+        if old_file.exists():
+            try:
+                old_file.unlink()
+            except OSError as e:
+                logger.error(f"Failed to delete old history file: {e}")
 
     def _load(self):
         if self.history_file.exists():
             try:
-                import pickle
-                with open(self.history_file, "rb") as f:
-                    data = pickle.load(f)
-                    self._undo_stack = data.get("undo", [])
-                    self._redo_stack = data.get("redo", [])
-            except Exception:
-                pass
+                with open(self.history_file, "r") as f:
+                    data = json.load(f)
+
+                    if not isinstance(data, dict):
+                        logger.error("Invalid history format: Expected a dictionary")
+                        self._undo_stack = []
+                        self._redo_stack = []
+                        return
+
+                    self._undo_stack = [FileOperation.from_dict(op) for op in data.get("undo", [])]
+                    self._redo_stack = [FileOperation.from_dict(op) for op in data.get("redo", [])]
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse history JSON: {e}")
+                self._undo_stack = []
+                self._redo_stack = []
+            except OSError as e:
+                logger.error(f"Failed to read history file: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error loading history: {e}")
 
     def _save(self):
         try:
-            import pickle
             self.history_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.history_file, "wb") as f:
-                pickle.dump({"undo": self._undo_stack, "redo": self._redo_stack}, f)
-        except Exception:
-            pass
+            data = {
+                "undo": [op.to_dict() for op in self._undo_stack],
+                "redo": [op.to_dict() for op in self._redo_stack]
+            }
+            with open(self.history_file, "w") as f:
+                json.dump(data, f, indent=2)
+        except OSError as e:
+            logger.error(f"Failed to save history file: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error saving history: {e}")
 
     def log_operation(self, op: FileOperation) -> None:
         """Log an operation to the undo stack."""
