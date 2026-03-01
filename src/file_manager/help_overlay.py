@@ -79,6 +79,7 @@ class HelpOverlay(ModalScreen):
 
     BINDINGS = [
         Binding("escape", "dismiss", "Close"),
+        Binding("h", "dismiss", "Close"),
     ]
 
     SHORTCUTS = {

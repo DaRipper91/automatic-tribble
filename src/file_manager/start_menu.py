@@ -34,9 +34,10 @@ class StartMenuScreen(Screen):
     #menu-container {
         width: 70;
         height: auto;
-        border: heavy $primary;
-        padding: 2;
+        border: thick $primary;
+        padding: 3 5;
         background: $panel;
+        align: center middle;
     }
 
     #logo {

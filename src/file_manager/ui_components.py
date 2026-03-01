@@ -63,12 +63,29 @@ class EnhancedStatusBar(Widget):
     def watch_sort_mode(self, mode: str) -> None:
         self.query_one("#sort-info", Label).update(f"Sort: {mode}")
 
+    def on_mount(self) -> None:
+        # We need a timer to animate the spinner if it's visible.
+        self._spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+        self._spinner_idx = 0
+        self._spinner_timer = self.set_interval(0.1, self._tick_spinner, pause=True)
+
+    def _tick_spinner(self) -> None:
+        if self.is_loading:
+            self._spinner_idx = (self._spinner_idx + 1) % len(self._spinner_chars)
+            spinner = self.query_one("#spinner", Label)
+            spinner.update(self._spinner_chars[self._spinner_idx])
+
     def watch_is_loading(self, loading: bool) -> None:
         spinner = self.query_one("#spinner", Label)
         if loading:
             spinner.add_class("loading")
+            if hasattr(self, "_spinner_timer"):
+                self._spinner_timer.resume()
         else:
             spinner.remove_class("loading")
+            if hasattr(self, "_spinner_timer"):
+                self._spinner_timer.pause()
+            spinner.update("⟳")
 
     def watch_message(self, message: str) -> None:
         self.query_one("#status-msg", Label).update(message)
