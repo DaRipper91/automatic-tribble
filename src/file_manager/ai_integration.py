@@ -69,9 +69,9 @@ class GeminiClient:
             self.prompt_env = Environment(
                 loader=FileSystemLoader(str(Path(__file__).parent / "prompts"))
             )
-        except Exception:
+        except Exception as e:
             # Fallback if prompts dir is missing or path issue
-            logger.error("Failed to load prompt templates. AI features may be limited.")
+            logger.error(f"Failed to load prompt templates. AI features may be limited. Error: {e}")
             self.prompt_env = None
 
     def generate_plan(self, user_command: str, current_dir: Path) -> Dict[str, Any]:
@@ -317,7 +317,8 @@ class GeminiClient:
             data = ResponseValidator.validate_search(response_text)
             indices = data.get("indices", [])
             return [history[i] for i in indices if 0 <= i < len(history)]
-        except Exception:
+        except Exception as e:
+             logger.error(f"Failed to perform semantic search: {e}")
              return [h for h in history if query.lower() in h["command"].lower()]
 
     def process_command(self, command: str, current_dir: Optional[Path] = None) -> Dict[str, Any]:

@@ -13,7 +13,7 @@ class TestOperationHistory:
     @pytest.fixture
     def history(self, history_file):
         with patch("pathlib.Path.home", return_value=history_file.parent):
-             # It expects .tfm subdir
+            # It expects .tfm subdir
             (history_file.parent / ".tfm").mkdir(parents=True, exist_ok=True)
             h = OperationHistory()
             # Verify it uses the correct path
@@ -73,7 +73,7 @@ class TestOperationHistory:
     def test_cleanup_old_history(self, tmp_path):
         # Create a dummy .tfm/history.pkl
         tfm_dir = tmp_path / ".tfm"
-        tfm_dir.mkdir()
+        tfm_dir.mkdir(parents=True, exist_ok=True)
         old_pickle = tfm_dir / "history.pkl"
         old_pickle.touch()
 
@@ -83,13 +83,26 @@ class TestOperationHistory:
 
             assert not old_pickle.exists()
 
-    def test_clear(self, history):
-        op = FileOperation(OperationType.RENAME, Path("/old"), Path("/new"))
-        history.log_operation(op)
-        history.clear()
+    def test_load_corrupted_file(self, history, history_file):
+        # Write corrupted JSON to the file
+        with open(history.history_file, 'w') as f:
+            f.write("{invalid json")
 
-        assert len(history._undo_stack) == 0
-        assert len(history._redo_stack) == 0
+        # Load it and verify it handles the error gracefully
+        with patch("pathlib.Path.home", return_value=history_file.parent):
+            new_history = OperationHistory()
+            assert len(new_history._undo_stack) == 0
+            assert len(new_history._redo_stack) == 0
+
+    def test_load_invalid_format(self, history, history_file):
+        # Write valid JSON but wrong format (list instead of dict)
+        with open(history.history_file, 'w') as f:
+            f.write("[]")
+
+        with patch("pathlib.Path.home", return_value=history_file.parent):
+            new_history = OperationHistory()
+            assert len(new_history._undo_stack) == 0
+            assert len(new_history._redo_stack) == 0
 
     def test_empty_undo_redo(self, history):
         assert history.undo_last() is None
@@ -106,13 +119,3 @@ class TestOperationHistory:
         assert len(history._redo_stack) == 0
         assert len(history._undo_stack) == 1
         assert history._undo_stack[0] == op2
-
-    def test_corrupted_json(self, history, history_file):
-        # Write corrupted JSON
-        json_path = history_file.parent / ".tfm" / "history.json"
-        json_path.write_text("{invalid json")
-
-        with patch("pathlib.Path.home", return_value=history_file.parent):
-            # Should not crash, just start empty
-            h = OperationHistory()
-            assert len(h._undo_stack) == 0

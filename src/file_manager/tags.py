@@ -131,19 +131,18 @@ class TagManager:
             logger.error(f"Failed to list tags: {e}")
             return []
 
-    def export_tags(self) -> Dict[str, List[str]]:
-        """Export all tags to a dictionary {file_path: [tags]}."""
+    def get_all_tags_export(self) -> Dict[str, List[str]]:
+        """Export all tags as a dictionary {file_path: [tags]}."""
+        export_data: Dict[str, List[str]] = {}
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT file_path, tag FROM tags ORDER BY file_path")
-
-                result = {}
-                for file_path, tag in cursor.fetchall():
-                    if file_path not in result:
-                        result[file_path] = []
-                    result[file_path].append(tag)
-                return result
+                for path_str, tag in cursor.fetchall():
+                    if path_str not in export_data:
+                        export_data[path_str] = []
+                    export_data[path_str].append(tag)
+                return export_data
         except sqlite3.Error as e:
             logger.error(f"Failed to export tags: {e}")
             return {}
@@ -167,18 +166,3 @@ class TagManager:
             logger.error(f"Failed to cleanup tags: {e}")
 
         return removed_count
-
-    def get_all_tags_export(self) -> Dict[str, List[str]]:
-        """Export all tags as a dictionary {file_path: [tags]}."""
-        export_data = {}
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT file_path, tag FROM tags ORDER BY file_path")
-                for path_str, tag in cursor.fetchall():
-                    if path_str not in export_data:
-                        export_data[path_str] = []
-                    export_data[path_str].append(tag)
-        except sqlite3.Error as e:
-            logger.error(f"Failed to export tags: {e}")
-        return export_data

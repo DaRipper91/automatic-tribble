@@ -1,16 +1,24 @@
-import json
-import logging
+"""
+Core file operations with undo/redo support.
+"""
+
 import os
-import pickle
 import shutil
 import uuid
+import json
+import logging
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 from dataclasses import dataclass, field
 
-logger = logging.getLogger(__name__)
+from .utils import recursive_scan
+from .logger import get_logger
+from .exceptions import TFMPermissionError, TFMPathNotFoundError, TFMOperationConflictError
+from .plugins.registry import PluginRegistry
+
+logger = get_logger("file_ops")
 
 class OperationType(Enum):
     MOVE = auto()
@@ -56,8 +64,8 @@ class OperationHistory:
         self._undo_stack: List[FileOperation] = []
         self._redo_stack: List[FileOperation] = []
         self.history_file = Path.home() / ".tfm" / "history.json"
-        self._load()
         self._cleanup_old_history()
+        self._load()
 
     def _cleanup_old_history(self):
         """Remove old pickle history file if it exists."""
@@ -83,12 +91,10 @@ class OperationHistory:
 
                     self._undo_stack = [FileOperation.from_dict(op) for op in data.get("undo", [])]
                     self._redo_stack = [FileOperation.from_dict(op) for op in data.get("redo", [])]
-            except (json.JSONDecodeError, KeyError, ValueError) as e:
+            except (json.JSONDecodeError, KeyError, ValueError, OSError) as e:
                 logger.error(f"Failed to load operation history: {e}")
                 self._undo_stack = []
                 self._redo_stack = []
-            except OSError as e:
-                logger.error(f"Failed to read history file: {e}")
 
     def _save(self):
         """Save history to JSON file."""
@@ -131,16 +137,17 @@ class OperationHistory:
 
 class FileOperations:
     """Handles core file operations with undo support."""
-    def __init__(self, history: OperationHistory):
-        self.history = history
+    def __init__(self, history: Optional[OperationHistory] = None):
+        self.history = history or OperationHistory()
         self.trash_dir = Path.home() / ".tfm" / "trash"
         self.trash_dir.mkdir(parents=True, exist_ok=True)
+        self.plugins = PluginRegistry()
 
     async def move(self, source: Path, target: Path) -> bool:
         """Move a file or directory."""
         try:
             if target.exists():
-                return False
+                raise TFMOperationConflictError(f"Target already exists: {target}")
             shutil.move(str(source), str(target))
             self.history.log_operation(FileOperation(OperationType.MOVE, source, target))
             return True
@@ -152,7 +159,7 @@ class FileOperations:
         """Copy a file or directory."""
         try:
             if target.exists():
-                return False
+                raise TFMOperationConflictError(f"Target already exists: {target}")
             if source.is_dir():
                 shutil.copytree(str(source), str(target))
             else:
@@ -169,9 +176,33 @@ class FileOperations:
             trash_path = self.trash_dir / f"{uuid.uuid4()}_{path.name}"
             shutil.move(str(path), str(trash_path))
             self.history.log_operation(FileOperation(OperationType.DELETE, path, trash_path=trash_path))
+            self.plugins.on_file_deleted(path)
             return True
         except Exception as e:
             logger.error(f"Delete failed: {e}")
+            return False
+
+    async def rename(self, path: Path, new_name: str) -> bool:
+        """Rename a file or directory."""
+        try:
+            target = path.parent / new_name
+            if target.exists():
+                 raise TFMOperationConflictError(f"Target already exists: {target}")
+            path.rename(target)
+            self.history.log_operation(FileOperation(OperationType.RENAME, path, target))
+            return True
+        except Exception as e:
+            logger.error(f"Rename failed: {e}")
+            return False
+
+    async def create_directory(self, path: Path, exist_ok: bool = False) -> bool:
+        """Create a new directory."""
+        try:
+            path.mkdir(parents=True, exist_ok=exist_ok)
+            self.history.log_operation(FileOperation(OperationType.CREATE_DIR, path))
+            return True
+        except Exception as e:
+            logger.error(f"Create directory failed: {e}")
             return False
 
     async def undo(self) -> str:
@@ -193,6 +224,13 @@ class FileOperations:
             elif op.type == OperationType.DELETE:
                 shutil.move(str(op.trash_path), str(op.original_path))
                 return f"Restored from trash: {op.original_path.name}"
+            elif op.type == OperationType.RENAME:
+                op.target_path.rename(op.original_path)
+                return f"Undid rename: {op.original_path.name}"
+            elif op.type == OperationType.CREATE_DIR:
+                if op.original_path.exists():
+                     shutil.rmtree(str(op.original_path))
+                return f"Undid directory creation: {op.original_path.name}"
         except Exception as e:
             return f"Undo failed: {e}"
 
@@ -217,6 +255,12 @@ class FileOperations:
             elif op.type == OperationType.DELETE:
                 shutil.move(str(op.original_path), str(op.trash_path))
                 return f"Redid delete: {op.original_path.name}"
+            elif op.type == OperationType.RENAME:
+                op.original_path.rename(op.target_path)
+                return f"Redid rename: {op.target_path.name}"
+            elif op.type == OperationType.CREATE_DIR:
+                op.original_path.mkdir(parents=True, exist_ok=True)
+                return f"Redid directory creation: {op.original_path.name}"
         except Exception as e:
             return f"Redo failed: {e}"
 
