@@ -69,9 +69,9 @@ class GeminiClient:
             self.prompt_env = Environment(
                 loader=FileSystemLoader(str(Path(__file__).parent / "prompts"))
             )
-        except Exception:
+        except Exception as e:
             # Fallback if prompts dir is missing or path issue
-            logger.error("Failed to load prompt templates. AI features may be limited.")
+            logger.error(f"Failed to load prompt templates. AI features may be limited. Error: {e}")
             self.prompt_env = None
 
     def generate_plan(self, user_command: str, current_dir: Path) -> Dict[str, Any]:
@@ -98,38 +98,53 @@ class GeminiClient:
             return json.loads(self._mock_response(user_command, current_dir))
 
         # Call AI
-        if self.executor.is_available():
-            response_text = self.executor.execute_prompt(prompt)
-        else:
+        max_retries = 3
+        current_prompt = prompt
+        last_error = ""
+        last_response_text = ""
+
+        if not self.executor.is_available():
             # Fallback/Mock for testing environment
             logger.warning("Gemini CLI not available. Using mock response.")
             return json.loads(self._mock_response(user_command, current_dir))
 
-        # Validate
-        try:
-            return ResponseValidator.validate_plan(response_text)
-        except ValueError as e:
-            logger.warning(f"Validation failed: {e}. Retrying with feedback.")
-            return self._retry_with_feedback(user_command, prompt, str(e), ResponseValidator.validate_plan)
+        for attempt in range(max_retries + 1):
+            response_text = self.executor.execute_prompt(current_prompt)
+            last_response_text = response_text
 
-    def _retry_with_feedback(self, original_command: str, original_prompt: str, error: str, validator_func) -> Dict[str, Any]:
-        try:
-            template = self.prompt_env.get_template("validation.jinja2")
-            feedback_prompt = template.render(
-                validation_error=error,
-                user_command=original_command
-            )
+            try:
+                return ResponseValidator.validate_plan(response_text)
+            except ValueError as e:
+                last_error = str(e)
+                logger.warning(f"Validation failed (attempt {attempt + 1}/{max_retries + 1}): {e}.")
 
-            full_prompt = f"{original_prompt}\n\n{feedback_prompt}"
+                if attempt < max_retries:
+                    # Retry with feedback
+                    try:
+                        template = self.prompt_env.get_template("validation.jinja2")
+                        feedback_prompt = template.render(
+                            validation_error=last_error,
+                            user_command=user_command
+                        )
+                        current_prompt = f"{prompt}\n\n{feedback_prompt}"
+                    except Exception as tpl_e:
+                        logger.error(f"Failed to load validation template: {tpl_e}")
+                        break # Cannot retry without template
+                else:
+                    logger.error("Max retries reached. Falling back to dummy plan.")
 
-            if self.executor.is_available():
-                response_text = self.executor.execute_prompt(full_prompt)
-                return validator_func(response_text)
-            else:
-                 raise ValueError(f"Mock validation failed: {error}")
-        except Exception as e:
-            logger.error(f"Retry failed: {e}")
-            raise ValueError(f"AI Plan Generation Failed: {e}")
+        # Fallback to graceful dummy plan with raw response
+        return {
+            "plan": [
+                {
+                    "step": 1,
+                    "action": "unknown",
+                    "params": {},
+                    "description": f"Failed to generate valid plan. Raw response:\n{last_response_text}\n\nPlease try rephrasing your command.",
+                    "is_destructive": False
+                }
+            ]
+        }
 
     def _mock_response(self, command: str, current_dir: Path) -> str:
         """Generate a mock JSON response for testing."""
@@ -302,7 +317,8 @@ class GeminiClient:
             data = ResponseValidator.validate_search(response_text)
             indices = data.get("indices", [])
             return [history[i] for i in indices if 0 <= i < len(history)]
-        except Exception:
+        except Exception as e:
+             logger.error(f"Failed to perform semantic search: {e}")
              return [h for h in history if query.lower() in h["command"].lower()]
 
     def process_command(self, command: str, current_dir: Optional[Path] = None) -> Dict[str, Any]:

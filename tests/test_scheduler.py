@@ -1,8 +1,6 @@
 import pytest
-import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 from src.file_manager.scheduler import TaskScheduler
-from datetime import datetime, timedelta
 
 @pytest.fixture
 def scheduler(tmp_path):

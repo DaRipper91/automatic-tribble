@@ -44,6 +44,24 @@ class UserModeScreen(Screen):
         height: 100%;
     }
 
+    /* Tab styles for distinct UI */
+    Tabs {
+        background: $surface;
+        border-bottom: solid $primary;
+    }
+
+    Tab {
+        color: $text-muted;
+        background: $surface-lighten-1;
+    }
+
+    Tab.-active {
+        color: $accent;
+        background: $surface;
+        border-top: solid $accent;
+        text-style: bold;
+    }
+
     #preview-pane {
         width: 0;
         border: none;
@@ -429,12 +447,38 @@ class UserModeScreen(Screen):
     def on_node_highlighted(self, event) -> None:
         self._update_preview()
 
+    @on(MultiSelectDirectoryTree.DirectorySelected)
+    def on_directory_selected(self, event) -> None:
+        """Update active tab label on directory change."""
+        dual = self._get_active_dual_panes()
+        if dual:
+            active_panel = dual.active_panel
+            # Find which panel fired it, actually they both could but active panel is usually it.
+            # Just update the TabPane title to the active panel's current_dir name.
+            tabs = self.query_one(TabbedContent)
+            if tabs.active:
+                try:
+                    pane = tabs.get_pane(tabs.active)
+                    pane.update(active_panel.current_dir.name or "/")
+                except Exception:
+                    pass
+
     @on(TabbedContent.TabActivated)
     def on_tab_activated(self, event) -> None:
         self._update_status_bar()
         self._update_preview()
-        # Update tab label to current dir?
-        # TabPane label can be updated.
+
+        # Update the active tab's label just in case
+        dual = self._get_active_dual_panes()
+        if dual:
+            active_panel = dual.active_panel
+            tabs = self.query_one(TabbedContent)
+            if tabs.active:
+                try:
+                    pane = tabs.get_pane(tabs.active)
+                    pane.update(active_panel.current_dir.name or "/")
+                except Exception:
+                    pass
         self._focus_active_panel()
 
     def _update_status_bar(self) -> None:

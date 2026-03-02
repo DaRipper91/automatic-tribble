@@ -1,9 +1,7 @@
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock, AsyncMock
 from pathlib import Path
 from src.file_manager.ai_integration import GeminiClient
-from src.file_manager.ai_schema import PLAN_SCHEMA
 
 class MockExecutor:
     def is_available(self):

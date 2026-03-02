@@ -60,3 +60,49 @@ async def test_multi_selection_logic():
         await pilot.pause() # Allow reload worker to start/run
 
         assert len(tree.selected_paths) == 0
+
+@pytest.mark.asyncio
+async def test_range_selection_logic():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(UserModeScreen)
+        tree = screen.query("MultiSelectDirectoryTree").first()
+
+        # Give tree time to load
+        await pilot.pause()
+
+        tree.focus()
+
+        # Directly call the action methods to bypass event handling timing issues
+        tree.action_cursor_down() # Move to first item
+        tree.action_toggle_selection() # Set anchor
+        tree.action_select_down() # Range select next
+
+        await pilot.pause()
+
+        assert len(tree.selected_paths) > 0
+
+@pytest.mark.asyncio
+async def test_tab_switching():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(UserModeScreen)
+        tabs = screen.query_one(TabbedContent)
+
+        # Initial state: 1 tab
+        assert tabs.active == "tab-0"
+
+        # New Tab
+        await pilot.press("ctrl+t")
+        assert tabs.active == "tab-1"
+
+        # Another New Tab
+        await pilot.press("ctrl+t")
+        assert tabs.active == "tab-2"
+
+        # Cycle Tabs
+        await pilot.press("ctrl+tab")
+        assert tabs.active == "tab-0"
+
+        await pilot.press("ctrl+tab")
+        assert tabs.active == "tab-1"

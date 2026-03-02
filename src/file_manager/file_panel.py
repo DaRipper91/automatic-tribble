@@ -31,6 +31,7 @@ class MultiSelectDirectoryTree(DirectoryTree):
     def __init__(self, path: str, **kwargs):
         super().__init__(path, **kwargs)
         self.selected_paths: Set[Path] = set()
+        self._anchor_node = None
 
     def on_mount(self) -> None:
         super().on_mount()
@@ -39,6 +40,7 @@ class MultiSelectDirectoryTree(DirectoryTree):
         node = self.cursor_node
         if not node:
             return
+        self._anchor_node = node
 
         # Determine path from node data
         if not node.data or not hasattr(node.data, 'path'):
@@ -55,31 +57,57 @@ class MultiSelectDirectoryTree(DirectoryTree):
         self.post_message(self.SelectionChanged(self))
 
     def action_select_down(self) -> None:
+        if not self._anchor_node:
+            self._anchor_node = self.cursor_node
         self.action_cursor_down()
-        self._select_current_node()
+        self._select_range()
 
     def action_select_up(self) -> None:
+        if not self._anchor_node:
+            self._anchor_node = self.cursor_node
         self.action_cursor_up()
-        self._select_current_node()
+        self._select_range()
 
-    def _select_current_node(self) -> None:
-        node = self.cursor_node
-        if node and node.data and hasattr(node.data, 'path'):
-            path = Path(node.data.path)
-            self.selected_paths.add(path)
-            self._update_node_visual(node, selected=True)
+    def _select_range(self) -> None:
+        if not self._anchor_node or not self.cursor_node:
+            return
+
+        # Simple range selection: from anchor to current cursor
+        nodes = []
+        def _collect(n):
+            if n.is_expanded:
+                for c in n.children:
+                    nodes.append(c)
+                    _collect(c)
+        for child in self.root.children:
+            nodes.append(child)
+            _collect(child)
+
+        try:
+            anchor_idx = nodes.index(self._anchor_node)
+            cursor_idx = nodes.index(self.cursor_node)
+            start = min(anchor_idx, cursor_idx)
+            end = max(anchor_idx, cursor_idx)
+
+            # Clear current selection if we're making a new range from an anchor
+            self.selected_paths.clear()
+
+            for i in range(start, end + 1):
+                node = nodes[i]
+                if node.data and hasattr(node.data, 'path'):
+                    path = Path(node.data.path)
+                    self.selected_paths.add(path)
+                    self._update_node_visual(node, selected=True)
             self.post_message(self.SelectionChanged(self))
+        except ValueError:
+            pass
 
     def action_select_all(self) -> None:
-        # Select all siblings of current node (or all visible nodes if possible)
-        # We'll target siblings of cursor for simplicity, or children of root if at root.
         node = self.cursor_node
         if not node:
-             # Fallback to root children
              node = self.root
 
         parent = node.parent
-        # If node is root (which shouldn't happen for cursor usually unless empty), use it
         if not parent:
             target_nodes = node.children
         else:
@@ -100,19 +128,11 @@ class MultiSelectDirectoryTree(DirectoryTree):
 
     def _update_node_visual(self, node, selected: bool) -> None:
         label = node.label
-        # Textual DirectoryTree labels are typically simple strings or Text objects.
-        # We need to preserve the original text but change style.
-
-        # Check if we have cached original label (not standard, but we can try to guess)
-        # Or just toggle style.
-
         current_text = str(label)
 
         if selected:
-            # Apply highlight style
-            new_label = Text(current_text, style="bold blue reverse")
+            new_label = Text(current_text, style="reverse")
         else:
-            # Revert to default (empty style or just string)
             new_label = Text(current_text)
 
         node.set_label(new_label)

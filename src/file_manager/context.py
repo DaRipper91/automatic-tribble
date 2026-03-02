@@ -111,7 +111,7 @@ class DirectoryContextBuilder:
         # Process largest files (sort descending)
         largest_files_heap.sort(key=lambda x: x[0], reverse=True)
         top_largest = [
-            FileInfo(name=name, size=self._human_size(size))
+            FileInfo(name=name, size=self._human_size(float(size)))
             for size, name in largest_files_heap
         ]
 
@@ -121,7 +121,7 @@ class DirectoryContextBuilder:
         return DirectoryStats(
             total_files=total_files,
             total_size=total_size,
-            total_size_human=self._human_size(total_size),
+            total_size_human=self._human_size(float(total_size)),
             category_counts=categories,
             oldest_file=oldest_name,
             newest_file=newest_name,
@@ -129,8 +129,8 @@ class DirectoryContextBuilder:
             duplicate_groups=duplicate_groups
         )
 
-    def _human_size(self, size: int) -> str:
-        current_size = float(size)
+    def _human_size(self, size: float) -> str:
+        current_size = size
         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
             if current_size < 1024.0:
                 return f"{current_size:.1f} {unit}"
