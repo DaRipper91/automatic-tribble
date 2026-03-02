@@ -38,7 +38,8 @@ class MultiSelectDirectoryTree(DirectoryTree):
 
     def action_toggle_selection(self) -> None:
         node = self.cursor_node
-        if not node: return
+        if not node:
+            return
         self._anchor_node = node
 
         # Determine path from node data
@@ -72,8 +73,6 @@ class MultiSelectDirectoryTree(DirectoryTree):
             return
 
         # Simple range selection: from anchor to current cursor
-        # In a real tree, we'd need to find the flat order of nodes to know which are between.
-        # DirectoryTree nodes don't easily give a flat index. We can traverse visible nodes.
         nodes = []
         def _collect(n):
             if n.is_expanded:
@@ -92,7 +91,6 @@ class MultiSelectDirectoryTree(DirectoryTree):
 
             # Clear current selection if we're making a new range from an anchor
             self.selected_paths.clear()
-            self.reload() # Clear visual state, although it flashes it works
 
             for i in range(start, end + 1):
                 node = nodes[i]
@@ -105,15 +103,11 @@ class MultiSelectDirectoryTree(DirectoryTree):
             pass
 
     def action_select_all(self) -> None:
-        # Select all siblings of current node (or all visible nodes if possible)
-        # We'll target siblings of cursor for simplicity, or children of root if at root.
         node = self.cursor_node
         if not node:
-             # Fallback to root children
              node = self.root
 
         parent = node.parent
-        # If node is root (which shouldn't happen for cursor usually unless empty), use it
         if not parent:
             target_nodes = node.children
         else:
@@ -134,19 +128,11 @@ class MultiSelectDirectoryTree(DirectoryTree):
 
     def _update_node_visual(self, node, selected: bool) -> None:
         label = node.label
-        # Textual DirectoryTree labels are typically simple strings or Text objects.
-        # We need to preserve the original text but change style.
-
-        # Check if we have cached original label (not standard, but we can try to guess)
-        # Or just toggle style.
-
         current_text = str(label)
 
         if selected:
-            # Apply highlight style. Use generic reverse for theme compatibility.
             new_label = Text(current_text, style="reverse")
         else:
-            # Revert to default (empty style or just string)
             new_label = Text(current_text)
 
         node.set_label(new_label)

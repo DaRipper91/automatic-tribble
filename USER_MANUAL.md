@@ -331,3 +331,45 @@ All operations are logged. You can create a plugin to redirect logs to a specifi
 ---
 
 **Happy Managing!** 🚀
+
+## New Features (v1.1)
+
+### Undo and Redo
+
+TFM now includes an `OperationHistory` stack that tracks all destructive operations (move, copy, delete, rename, create directory). You can easily undo or redo operations using the CLI flags:
+
+- `tfm-auto --undo`: Undoes the last operation.
+- `tfm-auto --redo`: Redoes the last undone operation.
+
+### Duplicate File Resolution Engine
+
+The `duplicates` command in `tfm-auto` has been enhanced with a multi-pass intelligent resolution engine. It compares file size, partial hash, and full SHA-256 hash. It now supports five resolution strategies:
+
+- `newest`: Keeps the newest file, deletes others.
+- `oldest`: Keeps the oldest file, deletes others.
+- `largest`: Keeps the largest file, deletes others.
+- `smallest`: Keeps the smallest file, deletes others.
+- `interactive`: Prompts you to select which file to keep.
+
+Example:
+`tfm-auto duplicates --dir ~/Downloads --resolve largest`
+
+### Custom Categories Configuration
+
+You can now customize your file categories used by the `organize` command. TFM creates a `categories.yaml` in your `~/.tfm/` folder.
+To quickly edit this file, use:
+`tfm-auto config --edit-categories`
+
+### CLI Progress Bars and JSON Output
+
+- All long-running operations (`organize`, `duplicates`, `cleanup`, `rename`) now present a beautiful rich progress bar with dynamic summaries.
+- Add `--json` to any command to receive machine-readable JSON output instead of the visual UI, useful for scripting and pipelining commands.
+
+### TFM Plugin Architecture
+
+TFM supports extending its functionality with Python plugins! Simply drop a Python file containing a subclass of `TFMPlugin` into `~/.tfm/plugins/`.
+Plugins support hooks:
+- `on_file_added(path)`
+- `on_file_deleted(path)`
+- `on_organize(source, destination)`
+- `on_search_complete(query, results)`
