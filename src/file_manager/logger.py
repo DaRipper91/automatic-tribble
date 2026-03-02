@@ -16,22 +16,25 @@ def setup_logging(level: str = "INFO", log_file: Optional[str] = None) -> loggin
     Returns:
         The configured root logger.
     """
-    logging.basicConfig(
-        level=level,
-        format="%(message)s",
-        datefmt="[%X]",
-        handlers=[RichHandler(rich_tracebacks=True, markup=True)]
-    )
-
-    logger = logging.getLogger("tfm")
-    logger.setLevel(level)
+    handlers = [RichHandler(rich_tracebacks=True, markup=True)]
 
     if log_file:
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(
             logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         )
-        logger.addHandler(file_handler)
+        handlers.append(file_handler)
+
+    logging.basicConfig(
+        level=level,
+        format="%(message)s",
+        datefmt="[%X]",
+        handlers=handlers,
+        force=True # Force reconfiguration
+    )
+
+    logger = logging.getLogger("tfm")
+    logger.setLevel(level)
 
     return logger
 

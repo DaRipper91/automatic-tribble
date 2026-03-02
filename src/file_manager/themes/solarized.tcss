@@ -1,0 +1,13 @@
+/* Solarized Theme */
+$surface: #002b36;
+$panel: #073642;
+$background: #002b36;
+$primary: #268bd2;
+$secondary: #586e75;
+$accent: #2aa198;
+$text: #839496;
+$text-muted: #657b83;
+$success: #859900;
+$warning: #b58900;
+$error: #dc322f;
+$boost: #073642;

@@ -1,0 +1,13 @@
+/* Light Theme */
+$surface: #ffffff;
+$panel: #f3f3f3;
+$background: #ffffff;
+$primary: #007acc;
+$secondary: #e1e1e1;
+$accent: #007acc;
+$text: #333333;
+$text-muted: #666666;
+$success: #008000;
+$warning: #795e26;
+$error: #d13438;
+$boost: #e6e6e6;

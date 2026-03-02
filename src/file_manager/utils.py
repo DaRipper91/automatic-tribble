@@ -3,6 +3,14 @@ import os
 from pathlib import Path
 from typing import Optional, Union, Generator
 
+def format_size(size_bytes: int) -> str:
+    """Format size in bytes to human readable string."""
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
+        if size_bytes < 1024.0:
+            return f"{size_bytes:.1f} {unit}"
+        size_bytes /= 1024.0
+    return f"{size_bytes:.1f} PB"
+
 def find_gemini_executable() -> Optional[str]:
     """
     Finds the path to the gemini executable.

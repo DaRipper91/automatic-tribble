@@ -1,8 +1,5 @@
 import pytest
-import json
-import asyncio
-from unittest.mock import MagicMock, AsyncMock
-from pathlib import Path
+from unittest.mock import AsyncMock
 from datetime import datetime, timedelta
 from src.file_manager.scheduler import TaskScheduler
 
