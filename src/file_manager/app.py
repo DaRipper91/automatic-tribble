@@ -26,40 +26,31 @@ class FileManagerApp(App):
     
     TITLE = "File Manager"
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self):
+        super().__init__()
         self.config_manager = ConfigManager()
     
     def on_mount(self) -> None:
         """Called when app starts."""
-        self._load_theme()
+        self.load_configured_theme()
         self.push_screen(StartMenuScreen())
 
-    def _load_theme(self) -> None:
-        """Load the configured theme."""
+    def load_configured_theme(self) -> None:
+        """Load and apply the configured theme."""
         theme_name = self.config_manager.get_theme()
         self.load_theme_by_name(theme_name)
 
     def load_theme_by_name(self, theme_name: str) -> None:
         """Load a specific theme by name."""
-        theme_path = Path(__file__).parent / "themes" / f"{theme_name}.tcss"
-
-        if theme_path.exists():
-            try:
-                theme_content = theme_path.read_text()
-                # Determine if we can use existing stylesheet manipulation
-                # For simplicity, we just add the source which overrides variables
-                # Note: Repeatedly adding sources might grow memory, but for reasonable usage it's fine.
-                # Ideally we would replace the theme layer.
-                self.stylesheet.add_source(theme_content, str(theme_path))
-                self.refresh_css()
-            except Exception as e:
-                self.notify(f"Failed to load theme {theme_name}: {e}", severity="error")
-        else:
-            # Fallback to dark if theme not found
-            if theme_name != "dark":
-                self.config_manager.set_theme("dark")
-                self.load_theme_by_name("dark")
+        try:
+            theme_path = Path(__file__).parent / "themes" / f"{theme_name}.tcss"
+            if theme_path.exists():
+                with open(theme_path, "r") as f:
+                    self.stylesheet.add_source(f.read())
+                    self.refresh_css()
+        except Exception as e:
+            # Fallback to defaults if theme loading fails
+            print(f"Failed to load theme {theme_name}: {e}")
 
 
 def main():

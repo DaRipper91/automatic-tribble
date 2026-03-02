@@ -11,10 +11,7 @@ Directory Stats:
 - Categories: {{ directory_stats.category_counts }}
 - Oldest File: {{ directory_stats.oldest_file }}
 - Newest File: {{ directory_stats.newest_file }}
-- Top Largest Files:
-{% for file in directory_stats.top_largest_files %}
-  - {{ file.name }} ({{ file.size }})
-{% endfor %}
+- Top 5 Largest Files: {{ directory_stats.top_5_largest | join(', ') }}
 - Duplicate Groups Detected: {{ directory_stats.duplicate_groups }}
 {% endif %}
 
@@ -29,30 +26,43 @@ AVAILABLE ACTIONS:
    Params: directory (path), recursive (bool)
 5. batch_rename: Rename files matching a pattern.
    Params: directory (path), pattern (str), replacement (str), recursive (bool)
-6. add_tag: Add a tag to a file.
-   Params: file (path), tag (str)
-7. remove_tag: Remove a tag from a file.
-   Params: file (path), tag (str)
+6. create_directory: Create a new directory.
+   Params: path (path)
+7. move_file: Move a specific file or glob.
+   Params: source (path), target (path)
+8. copy_file: Copy a specific file or glob.
+   Params: source (path), target (path)
+9. delete_file: Delete a specific file or glob.
+   Params: path (path)
+10. add_tag: Add a tag to a file.
+    Params: file (path), tag (str)
+11. remove_tag: Remove a tag from a file.
+    Params: file (path), tag (str)
 
 SAFETY RULES:
-- If the user asks to "clean" or "delete", ALWAYS set `dry_run` to true initially if available, or ensure the description emphasizes the destructive nature.
+- NEVER delete files without ensuring they are reviewed first (the system uses dry-run and confirmation prompts automatically).
+- Always default to destructive actions requiring user confirmation, but provide the necessary steps so the system can show a complete diff.
 - Do not hallucinate paths. Use the provided Current Directory as the base.
-- Break down complex requests into atomic steps.
 
 OUTPUT FORMAT:
-Return ONLY a valid JSON object with the following schema:
+Return ONLY a valid JSON object with the following strict schema:
 {
   "plan": [
     {
       "step": 1,
       "action": "action_name",
-      "params": { ... },
+      "source": "path/to/source",
+      "target": "path/to/target",
+      "directory": "path/to/dir",
+      "move": true,
+      "recursive": false,
       "description": "Human readable description of this step",
       "is_destructive": true/false
     },
     ...
   ]
 }
+Note: Place the necessary parameters directly in the step object (do NOT use a nested "params" object). Provide only the parameters required by the chosen action.
 
 USER COMMAND:
 {{ user_command }}

@@ -66,11 +66,6 @@ class AIModeScreen(Screen):
         height: auto;
         margin-bottom: 1;
     }
-
-    #history-container {
-        height: auto;
-        margin-bottom: 1;
-    }
     """
 
     BINDINGS = [
@@ -143,9 +138,6 @@ class AIModeScreen(Screen):
                     yield Button("Find Duplicates", id="btn_duplicates", classes="action-btn")
                     yield Button("Batch Rename", id="btn_rename", classes="action-btn")
 
-                    yield Label("Settings", classes="section-title")
-                    yield Checkbox("Enable Dry Run", value=True, id="chk_dry_run")
-
                 # Right Panel: Interaction
                 with Vertical(id="right-panel"):
                     yield Label("Target Directory:", classes="section-title")
@@ -155,6 +147,8 @@ class AIModeScreen(Screen):
                     with Horizontal(id="input-container"):
                         yield Input(placeholder="Describe what you want to do...", id="command_input", classes="command-input")
                         yield Button("Process", id="process_btn", variant="primary")
+
+                    yield Checkbox("Dry-Run Safety Mode", id="dry_run_checkbox", value=True)
 
                     with Horizontal(id="history-container"):
                          yield Button("Search History", id="history_btn", variant="default")
@@ -215,15 +209,23 @@ class AIModeScreen(Screen):
         log.write(message)
 
     @work(thread=True)
-    def _generate_plan_worker(self, command: str, target_path: Path) -> None:
+    def _generate_plan_worker(self, command: str, target_path: Path, use_dry_run: bool = True) -> None:
         """Generate a plan in background."""
         self.app.call_from_thread(self._log_message, f"[dim]Thinking... Context: {target_path}[/]")
 
-        # Check dry run toggle
-        is_dry_run_enabled = self.query_one("#chk_dry_run", Checkbox).value
-
         try:
             plan_data = self.gemini_client.generate_plan(command, target_path)
+
+            if "fallback_text" in plan_data:
+                fallback_msg = (
+                    "[bold red]AI could not generate a valid plan after retries.[/bold red]\n"
+                    "[bold yellow]Raw Output:[/bold yellow]\n"
+                    f"[dim]{plan_data['fallback_text']}[/dim]\n\n"
+                    "[bold green]Please rephrase your command and try again.[/bold green]"
+                )
+                self.app.call_from_thread(self._log_message, fallback_msg)
+                return
+
             self.current_plan = plan_data.get("plan", [])
 
             if not self.current_plan:
@@ -236,11 +238,9 @@ class AIModeScreen(Screen):
                 icon = "🗑️" if step.get("is_destructive") else "📝"
                 msg += f"{step['step']}. {icon} [bold]{step['action']}[/]: {step['description']}\n"
 
-            self.app.call_from_thread(self._log_message, msg)
-
-            if is_dry_run_enabled:
+            if use_dry_run:
                 # Dry Run Simulation
-                dry_msg = "\n[bold cyan]Dry Run Simulation (Safety Check):[/bold cyan]\n"
+                msg += "\n[bold cyan]Dry Run Simulation:[/bold cyan]\n"
                 for step in self.current_plan:
                      # Running dry run for each step to get prediction
                      try:
@@ -249,27 +249,25 @@ class AIModeScreen(Screen):
                              color = "red"
                          elif "move" in res.lower() or "rename" in res.lower() or "organize" in res.lower():
                              color = "yellow"
-                         elif "add" in res.lower() or "create" in res.lower():
-                             color = "green"
                          else:
-                             color = "white"
-                         dry_msg += f"  Step {step['step']}: [{color}]{res}[/{color}]\n"
+                             color = "green"
+                         msg += f"  Step {step['step']}: [{color}]{res}[/{color}]\n"
                      except Exception as e:
-                         dry_msg += f"  Step {step['step']}: [red]Simulation failed: {e}[/]\n"
+                         msg += f"  Step {step['step']}: [red]Simulation failed: {e}[/]\n"
 
-                self.app.call_from_thread(self._log_message, dry_msg)
-
+                self.app.call_from_thread(self._log_message, msg)
                 # Trigger confirmation flow
-                self.app.call_from_thread(self._request_confirmation, command, "Confirm Execution")
+                self.app.call_from_thread(self._request_confirmation, command)
             else:
-                # Direct confirmation if dry run disabled (still ask, but warn)
-                self.app.call_from_thread(self._log_message, "[bold red]Warning: Dry Run is disabled.[/]")
-                self.app.call_from_thread(self._request_confirmation, command, "Execute Immediately?")
+                self.app.call_from_thread(self._log_message, msg)
+                # Skip confirmation flow, just execute
+                self._save_history_entry(command, self.current_plan, "executed")
+                self._execute_plan_worker()
 
         except Exception as e:
              self.app.call_from_thread(self._log_message, f"[bold red]Error generating plan:[/bold red] {e}")
 
-    def _request_confirmation(self, command: str, title: str) -> None:
+    def _request_confirmation(self, command: str) -> None:
         """Ask user to confirm execution."""
         def check_confirm(confirmed: Optional[bool]) -> None:
             if confirmed:
@@ -281,8 +279,8 @@ class AIModeScreen(Screen):
 
         self.app.push_screen(
             ConfirmationScreen(
-                title,
-                confirm_label="Yes, Execute",
+                "Execute this plan?",
+                confirm_label="Confirm & Execute",
                 confirm_variant="success"
             ),
             check_confirm
@@ -365,6 +363,7 @@ class AIModeScreen(Screen):
         """Process the current command."""
         command_input = self.query_one("#command_input", Input)
         target_dir_input = self.query_one("#target_dir_input", Input)
+        dry_run_checkbox = self.query_one("#dry_run_checkbox", Checkbox)
         log = self.query_one("#output_log", RichLog)
 
         command_text = command_input.value.strip()
@@ -382,4 +381,4 @@ class AIModeScreen(Screen):
         log.write(f"\n[bold blue]Processing command:[/] {command_text}")
 
         # Start background worker
-        self._generate_plan_worker(command_text, target_path)
+        self._generate_plan_worker(command_text, target_path, use_dry_run=dry_run_checkbox.value)

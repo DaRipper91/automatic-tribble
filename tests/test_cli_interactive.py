@@ -1,9 +1,7 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 from pathlib import Path
 from src.file_manager.cli import handle_duplicates
-from src.file_manager.automation import ConflictResolutionStrategy
 
 @pytest.mark.asyncio
 async def test_interactive_duplicate_resolution():

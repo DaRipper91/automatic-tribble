@@ -1,24 +1,13 @@
-Screen {
-    background: #282a36;
-    color: #f8f8f2;
-    scrollbar-color: #6272a4;
-    scrollbar-color-hover: #44475a;
-    scrollbar-color-active: #bd93f9;
-    scrollbar-background: #282a36;
-}
-
+/* Dracula Theme */
 $surface: #282a36;
-$surface-lighten-1: #44475a;
-$surface-lighten-2: #6272a4;
+$panel: #44475a;
 $background: #282a36;
-$panel: #282a36;
-$boost: #44475a;
 $primary: #bd93f9;
 $secondary: #6272a4;
 $accent: #ff79c6;
+$text: #f8f8f2;
+$text-muted: #6272a4;
 $success: #50fa7b;
 $warning: #f1fa8c;
 $error: #ff5555;
-$text: #f8f8f2;
-$text-muted: #6272a4;
-$text-disabled: #44475a;
+$boost: #44475a;

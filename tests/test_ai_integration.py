@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, AsyncMock
 from pathlib import Path
 from src.file_manager.ai_integration import GeminiClient
 
@@ -42,11 +42,9 @@ class TestGeminiClient(unittest.IsolatedAsyncioTestCase):
         step = {
             "step": 1,
             "action": "organize_by_type",
-            "params": {
-                "source": "/tmp/src",
-                "target": "/tmp/dst",
-                "move": True
-            },
+            "source": "/tmp/src",
+            "target": "/tmp/dst",
+            "move": True,
             "description": "desc",
             "is_destructive": False
         }

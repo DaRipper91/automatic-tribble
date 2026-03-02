@@ -1,24 +1,13 @@
-Screen {
-    background: #f8f8f8;
-    color: #24292e;
-    scrollbar-color: #d1d5da;
-    scrollbar-color-hover: #959da5;
-    scrollbar-color-active: #0366d6;
-    scrollbar-background: #f8f8f8;
-}
-
+/* Light Theme */
 $surface: #ffffff;
-$surface-lighten-1: #f3f3f3;
-$surface-lighten-2: #e1e4e8;
-$background: #f8f8f8;
-$panel: #eef1f5;
-$boost: #e1e4e8;
-$primary: #0366d6;
-$secondary: #e1e4e8;
-$accent: #005cc5;
-$success: #28a745;
-$warning: #d73a49;
-$error: #cb2431;
-$text: #24292e;
-$text-muted: #6a737d;
-$text-disabled: #959da5;
+$panel: #f3f3f3;
+$background: #ffffff;
+$primary: #007acc;
+$secondary: #e1e1e1;
+$accent: #007acc;
+$text: #333333;
+$text-muted: #666666;
+$success: #008000;
+$warning: #795e26;
+$error: #d13438;
+$boost: #e6e6e6;
