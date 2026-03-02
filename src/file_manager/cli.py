@@ -90,6 +90,7 @@ def setup_parser():
     tags.add_argument('--list', action='store_true', help='List all tags')
     tags.add_argument('--search', metavar='TAG', help='List files with tag')
     tags.add_argument('--cleanup', action='store_true', help='Clean up missing files')
+    tags.add_argument('--export', action='store_true', help='Export all tags')
 
     # Schedule command
     schedule = subparsers.add_parser('schedule', help='Manage scheduled tasks')
@@ -97,6 +98,7 @@ def setup_parser():
     schedule.add_argument('--add', nargs=4, metavar=('NAME', 'CRON', 'TYPE', 'PARAMS_JSON'), help='Add new job')
     schedule.add_argument('--remove', metavar='NAME', help='Remove job')
     schedule.add_argument('--daemon', action='store_true', help='Run scheduler daemon')
+    schedule.add_argument('--run-now', metavar='NAME', help='Run a scheduled job immediately')
     
     return parser
 
@@ -374,6 +376,14 @@ async def handle_tags(args):
         count = manager.cleanup_missing_files()
         console.print(f"Removed {count} missing files from database.")
 
+    elif args.export:
+        tags = manager.list_all_tags()
+        export_data = [{"tag": t, "count": c} for t, c in tags]
+        if args.json:
+            print(json.dumps(export_data, indent=2))
+        else:
+            console.print(json.dumps(export_data, indent=2))
+
     return 0
 
 async def handle_schedule(args):
@@ -416,6 +426,16 @@ async def handle_schedule(args):
             console.print(f"[green]Job '{args.remove}' removed.[/]")
         else:
             console.print(f"[yellow]Job '{args.remove}' not found.[/]")
+
+    elif args.run_now:
+        jobs = scheduler.list_jobs()
+        job_to_run = next((j for j in jobs if j["name"] == args.run_now), None)
+        if job_to_run:
+            console.print(f"[cyan]Running job '{args.run_now}' immediately...[/]")
+            await scheduler._execute_job(job_to_run)
+            console.print(f"[green]Job '{args.run_now}' completed.[/]")
+        else:
+            console.print(f"[red]Job '{args.run_now}' not found.[/]")
 
     return 0
 

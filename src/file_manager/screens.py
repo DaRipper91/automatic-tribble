@@ -2,12 +2,15 @@
 Screens for the file manager application.
 """
 
+import subprocess
+import shlex
 from typing import Optional
 from textual.app import ComposeResult
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar
+from textual.widgets import Button, Label, RadioSet, RadioButton, Input, Log, ProgressBar, OptionList
 from textual.containers import Container, Horizontal, Vertical
 from textual.binding import Binding
+from textual import work
 
 from .ai_utils import AIExecutor
 
@@ -295,44 +298,64 @@ class AIConfigScreen(Screen):
         # Show processing
         log.write_line("[yellow]Processing...[/]")
 
+        # Start background worker to avoid blocking UI
+        self._process_input_worker(user_input)
+
+    @work(thread=True)
+    def _process_input_worker(self, user_input: str) -> None:
+        """Process the user input in a background thread."""
         # Determine intent (command vs general query)
         # For now, assume command generation unless it looks like a question
         command, status = self.ai.generate_automation_command(user_input)
 
         if command:
-            log.write_line(f"[bold green]Generated Command:[/] {command}")
-            log.write_line(f"[italic]{status}[/]")
+            self.app.call_from_thread(self._safe_log, f"[bold green]Generated Command:[/] {command}")
+            self.app.call_from_thread(self._safe_log, f"[italic]{status}[/]")
 
             # Ask for confirmation to run
             def check_confirm(confirmed: Optional[bool]) -> None:
                 if confirmed:
-                    log.write_line("[yellow]Executing command...[/]")
-                    # Execute the command locally
-                    import subprocess
-                    import shlex
-                    try:
-                        args = shlex.split(command)
-                        result = subprocess.run(args, capture_output=True, text=True)
-                        if result.stdout:
-                            log.write_line(result.stdout)
-                        if result.stderr:
-                            log.write_line(f"[red]{result.stderr}[/]")
-                        log.write_line("[green]Command execution finished.[/]")
-                    except Exception as e:
-                        log.write_line(f"[red]Execution failed: {e}[/]")
+                    self._execute_command_worker(command)
                 else:
-                    log.write_line("[yellow]Command cancelled.[/]")
+                    self._safe_log("[yellow]Command cancelled.[/]")
 
-            self.app.push_screen(
+            self.app.call_from_thread(
+                self.app.push_screen,
                 ConfirmationScreen(f"Execute command:\n{command}?", confirm_label="Execute", confirm_variant="success"),
                 check_confirm
             )
         else:
-            log.write_line(f"[red]Could not generate command:[/] {status}")
+            self.app.call_from_thread(self._safe_log, f"[red]Could not generate command:[/] {status}")
             # Fallback to generic AI response
-            log.write_line("[yellow]Asking Gemini directly...[/]")
+            self.app.call_from_thread(self._safe_log, "[yellow]Asking Gemini directly...[/]")
             response = self.ai.execute_prompt(user_input)
-            log.write_line(f"[bold magenta]Gemini:[/] {response}")
+            self.app.call_from_thread(self._safe_log, f"[bold magenta]Gemini:[/] {response}")
+
+    @work(thread=True)
+    def _execute_command_worker(self, command: str) -> None:
+        """Execute the command in a background thread."""
+        self.app.call_from_thread(self._safe_log, "[yellow]Executing command...[/]")
+
+        try:
+            args = shlex.split(command)
+            result = subprocess.run(args, capture_output=True, text=True)
+            if result.stdout:
+                self.app.call_from_thread(self._safe_log, result.stdout)
+            if result.stderr:
+                self.app.call_from_thread(self._safe_log, f"[red]{result.stderr}[/]")
+            self.app.call_from_thread(self._safe_log, "[green]Command execution finished.[/]")
+        except Exception as e:
+            self.app.call_from_thread(self._safe_log, f"[red]Execution failed: {e}[/]")
+
+    def _safe_log(self, message: str) -> None:
+        """Log a message to the output log safely."""
+        try:
+            if not self.app or not self.is_mounted:
+                return
+            log = self.query_one(Log)
+            log.write_line(message)
+        except Exception:
+            pass
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         input_widget = self.query_one(Input)
@@ -451,6 +474,11 @@ class ConfirmationScreen(ModalScreen[bool]):
                 # ignore type error for variant string, as it is dynamically passed but safe
                 yield Button(self.confirm_label, variant=self.confirm_variant, id="confirm")  # type: ignore
 
+    def on_mount(self) -> None:
+        container = self.query_one("#dialog")
+        container.styles.opacity = 0.0
+        container.styles.animate("opacity", 1.0, duration=0.2)
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "confirm":
             self.dismiss(True)
@@ -543,6 +571,93 @@ class HelpScreen(ModalScreen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss()
 
+class ThemeSwitcher(ModalScreen[Optional[str]]):
+    """Screen to switch themes with live preview."""
+
+    CSS = """
+    ThemeSwitcher {
+        align: center middle;
+        background: $background 80%;
+    }
+    #theme-dialog {
+        width: 40;
+        height: auto;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
+    .title {
+        text-align: center;
+        text-style: bold;
+        margin-bottom: 1;
+        width: 100%;
+    }
+    OptionList {
+        height: auto;
+        max-height: 10;
+        border: solid $secondary;
+        margin-bottom: 1;
+    }
+    #buttons {
+        height: auto;
+        width: 100%;
+        align: center bottom;
+    }
+    Button {
+        margin: 0 1;
+        width: 1fr;
+    }
+    """
+
+    BINDINGS = [Binding("escape", "cancel", "Cancel")]
+
+    def __init__(self, current_theme: str):
+        super().__init__()
+        self.original_theme = current_theme
+        self.themes = ["dark", "light", "solarized", "dracula"]
+
+    def compose(self) -> ComposeResult:
+        with Container(id="theme-dialog"):
+            yield Label("Select Theme", classes="title")
+            yield OptionList(*self.themes, id="theme-list")
+            with Horizontal(id="buttons"):
+                yield Button("Cancel", variant="error", id="cancel")
+                yield Button("Apply", variant="success", id="apply")
+
+    def on_mount(self) -> None:
+        container = self.query_one("#theme-dialog")
+        container.styles.opacity = 0.0
+        container.animate("opacity", 1.0, duration=0.2)
+
+        option_list = self.query_one(OptionList)
+        try:
+            index = self.themes.index(self.original_theme)
+            option_list.highlighted = index
+        except ValueError:
+            pass
+
+    def on_option_list_option_highlighted(self, event: OptionList.OptionHighlighted) -> None:
+        theme = str(event.option.prompt)
+        if hasattr(self.app, "load_theme_by_name"):
+            self.app.load_theme_by_name(theme)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "apply":
+            option_list = self.query_one(OptionList)
+            if option_list.highlighted is not None:
+                selected_theme = self.themes[option_list.highlighted]
+                self.dismiss(selected_theme)
+            else:
+                self.action_cancel()
+        else:
+            self.action_cancel()
+
+    def action_cancel(self) -> None:
+        # Revert
+        if hasattr(self.app, "load_theme_by_name"):
+            self.app.load_theme_by_name(self.original_theme)
+        self.dismiss(None)
+
 
 class InputScreen(ModalScreen[str]):
     """Screen for getting text input from the user."""
@@ -613,6 +728,11 @@ class InputScreen(ModalScreen[str]):
             with Horizontal(id="buttons"):
                 yield Button("Cancel", variant="primary", id="cancel")
                 yield Button("OK", variant="success", id="ok")
+
+    def on_mount(self) -> None:
+        container = self.query_one("#input-dialog")
+        container.styles.opacity = 0.0
+        container.styles.animate("opacity", 1.0, duration=0.2)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "ok":
