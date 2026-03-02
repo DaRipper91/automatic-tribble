@@ -45,6 +45,26 @@ async def test_preview_toggle():
         assert not screen.show_preview
 
 @pytest.mark.asyncio
+async def test_preview_pane_state_persists():
+    app = HeadlessApp()
+    async with app.run_test() as pilot:
+        screen = app.query_one(UserModeScreen)
+        preview = screen.query_one("#preview-pane")
+
+        # Open preview
+        await pilot.press("p")
+        assert screen.show_preview
+        assert "visible" in preview.classes
+
+        # Simulate directory change by switching panel
+        screen.action_switch_panel()
+        await pilot.pause()
+
+        # State should persist
+        assert screen.show_preview
+        assert "visible" in preview.classes
+
+@pytest.mark.asyncio
 async def test_multi_selection_logic():
     app = HeadlessApp()
     async with app.run_test() as pilot:

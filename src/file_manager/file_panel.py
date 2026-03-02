@@ -131,7 +131,9 @@ class MultiSelectDirectoryTree(DirectoryTree):
         current_text = str(label)
 
         if selected:
-            new_label = Text(current_text, style="reverse")
+            # Revert to color-based highlighting as "reverse" just inverts background and text,
+            # which may not provide a distinct accent color based on theme.
+            new_label = Text(current_text, style="bold magenta")
         else:
             new_label = Text(current_text)
 

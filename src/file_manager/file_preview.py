@@ -74,8 +74,37 @@ class FilePreview(Static):
         modified = datetime.fromtimestamp(stats.st_mtime).strftime("%Y-%m-%d %H:%M:%S")
         size_str = self._format_size(stats.st_size)
 
+        # Basic metadata, since Pillow is not required we can't easily get dimensions without reading bits,
+        # but the prompt asks for "basic metadata (dimensions, file size, creation date)".
+        # Since we can't cleanly get dimensions without external deps like `Pillow`,
+        # we'll approximate metadata support (file size and creation date are accurate).
+        # TFM prompt: "For images (PNG, JPG), display basic metadata (dimensions, file size, creation date)"
+        # We'll use a fast binary parse for dimensions if it's png or jpg to fulfill requirements without Pillow.
+
+        dimensions = "Unknown"
+        try:
+            with open(path, 'rb') as f:
+                head = f.read(24)
+                if path.suffix.lower() == '.png' and head.startswith(b'\x89PNG\r\n\x1a\n'):
+                    import struct
+                    w, h = struct.unpack('>LL', head[16:24])
+                    dimensions = f"{w}x{h}"
+                elif path.suffix.lower() in ['.jpg', '.jpeg']:
+                    # Very basic JPEG dimension extraction
+                    f.seek(0)
+                    b = f.read()
+                    import struct
+                    # Find SOF0 (Start of Frame 0) marker
+                    idx = b.find(b'\xFF\xC0')
+                    if idx != -1:
+                        h, w = struct.unpack('>HH', b[idx+5:idx+9])
+                        dimensions = f"{w}x{h}"
+        except Exception:
+            pass
+
         info = [
             f"[bold]File:[/bold] {path.name}",
+            f"[bold]Dimensions:[/bold] {dimensions}",
             f"[bold]Size:[/bold] {size_str}",
             f"[bold]Created:[/bold] {created}",
             f"[bold]Modified:[/bold] {modified}",

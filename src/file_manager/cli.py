@@ -82,6 +82,7 @@ def setup_parser():
     # Config command
     config = subparsers.add_parser('config', help='Manage configuration')
     config.add_argument('--edit', action='store_true', help='Edit configuration file')
+    config.add_argument('--theme', choices=['dark', 'light', 'solarized', 'dracula'], help='Set UI theme')
 
     # Tags command
     tags = subparsers.add_parser('tags', help='Manage file tags')
@@ -327,6 +328,11 @@ async def handle_config(args):
     config_manager = ConfigManager()
     config_path = config_manager.get_config_path()
 
+    if args.theme:
+        config_manager.set_theme(args.theme)
+        console.print(f"[green]Theme successfully set to: {args.theme}[/green]")
+        return 0
+
     if args.edit:
         editor = os.environ.get('EDITOR', 'nano')
         subprocess.call([editor, str(config_path)])
@@ -334,6 +340,7 @@ async def handle_config(args):
         console.print(f"Configuration file: {config_path}")
         categories = config_manager.load_categories()
         console.print(categories)
+    return 0
 
 async def handle_tags(args):
     manager = TagManager()
