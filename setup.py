@@ -16,7 +16,19 @@ setup(
     install_requires=[
         "textual>=0.47.0",
         "rich>=13.7.0",
+        "jinja2",
+        "jsonschema",
+        "croniter",
+        "PyYAML",
     ],
+    extras_require={
+        "dev": [
+            "pytest",
+            "pytest-asyncio",
+            "ruff",
+            "mypy",
+        ],
+    },
     entry_points={
         "console_scripts": [
             "tfm=file_manager.app:main",

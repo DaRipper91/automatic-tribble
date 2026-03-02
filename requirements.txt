@@ -4,8 +4,3 @@ jinja2
 jsonschema
 croniter
 PyYAML
-pytest
-pytest-asyncio
-ruff
-mypy
-textual-serve
