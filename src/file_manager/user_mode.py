@@ -46,20 +46,18 @@ class UserModeScreen(Screen):
 
     /* Tab styles for distinct UI */
     Tabs {
-        background: $surface;
+        background: $panel;
         border-bottom: solid $primary;
     }
 
     Tab {
         color: $text-muted;
-        background: $surface-lighten-1;
     }
 
     Tab.-active {
         color: $accent;
-        background: $surface;
-        border-top: solid $accent;
         text-style: bold;
+        border-top: solid $accent;
     }
 
     #preview-pane {
@@ -142,7 +140,7 @@ class UserModeScreen(Screen):
             path = self.initial_path
 
         tabs = self.query_one(TabbedContent)
-        pane = TabPane(path.name or "Tab", id=new_id)
+        pane = TabPane(f"{path.name or 'Tab'} [X]", id=new_id)
         tabs.add_pane(pane)
         # Mount the DualFilePanes into the new pane
         pane.mount(DualFilePanes(path, path, id=f"dual-panes-{new_id}"))
@@ -459,12 +457,20 @@ class UserModeScreen(Screen):
             if tabs.active:
                 try:
                     pane = tabs.get_pane(tabs.active)
-                    pane.update(active_panel.current_dir.name or "/")
+                    pane.label = f"{active_panel.current_dir.name or '/'} [X]"
                 except Exception:
                     pass
 
     @on(TabbedContent.TabActivated)
     def on_tab_activated(self, event) -> None:
+        tabs = self.query_one(TabbedContent)
+        try:
+            pane = tabs.get_pane(tabs.active)
+            pane.styles.opacity = 0.0
+            pane.styles.animate("opacity", 1.0, duration=0.2)
+        except Exception:
+            pass
+
         self._update_status_bar()
         self._update_preview()
 
@@ -476,7 +482,7 @@ class UserModeScreen(Screen):
             if tabs.active:
                 try:
                     pane = tabs.get_pane(tabs.active)
-                    pane.update(active_panel.current_dir.name or "/")
+                    pane.label = f"{active_panel.current_dir.name or '/'} [X]"
                 except Exception:
                     pass
         self._focus_active_panel()

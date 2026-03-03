@@ -24,8 +24,8 @@ class StartMenuScreen(Screen):
     #menu-container {
         width: 80;
         height: auto;
-        border: thick $primary;
-        padding: 3 5;
+        border: round $primary;
+        padding: 2 4;
         background: $panel;
         align: center middle;
     }
@@ -35,6 +35,7 @@ class StartMenuScreen(Screen):
         color: $accent;
         margin-bottom: 1;
         height: auto;
+        text-style: bold;
     }
 
     #version {
@@ -68,13 +69,13 @@ class StartMenuScreen(Screen):
     """
 
     LOGO = """
-    ████████╗███████╗███╗   ███╗
-    ╚══██╔══╝██╔════╝████╗ ████║
-       ██║   █████╗  ██╔████╔██║
-       ██║   ██╔══╝  ██║╚██╔╝██║
-       ██║   ██║     ██║ ╚═╝ ██║
-       ╚═╝   ╚═╝     ╚═╝     ╚═╝
-    """
+[bold cyan]  ████████╗███████╗███╗   ███╗[/bold cyan]
+[bold cyan]  ╚══██╔══╝██╔════╝████╗ ████║[/bold cyan]
+[bold blue]     ██║   █████╗  ██╔████╔██║[/bold blue]
+[bold blue]     ██║   ██╔══╝  ██║╚██╔╝██║[/bold blue]
+[bold magenta]     ██║   ██║     ██║ ╚═╝ ██║[/bold magenta]
+[bold magenta]     ╚═╝   ╚═╝     ╚═╝     ╚═╝[/bold magenta]
+"""
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -83,7 +84,7 @@ class StartMenuScreen(Screen):
             with Vertical():
                 # Logo and Version
                 yield Static(self.LOGO, id="logo")
-                yield Label("v0.2.0", id="version")
+                yield Label("v0.1.0", id="version")
 
                 # Main Actions
                 yield Button("User Mode (File Manager)", id="user_mode", variant="primary", classes="menu-button")
@@ -131,35 +132,7 @@ class StartMenuScreen(Screen):
             path_str = str(event.button.label)
             path = Path(path_str)
             if path.exists() and path.is_dir():
-                screen = UserModeScreen()
-                # We need to set the path on the screen after pushing or init
-                # UserModeScreen defaults to home.
-                # Let's modify UserModeScreen to accept initial path or update it.
-                # Since we can't easily pass args to existing __init__ without changing signature everywhere,
-                # let's push it then update it.
-
+                screen = UserModeScreen(initial_path=path)
                 self.app.push_screen(screen)
-                # We need to wait for mount? Or just update attributes.
-                # UserModeScreen uses reactive properties.
-                # We can access the screen instance.
-
-                # Update the first tab
-                screen.tabs[0].left_path = path
-                screen.tabs[0].right_path = path
-                # Since screen is not mounted yet fully, this might be tricky if it relies on widgets.
-                # But UserModeScreen._load_tab_state uses widgets.
-                # We can perform the navigation in on_mount of UserModeScreen if we add a param,
-                # or call a method via call_later.
-
-                # Better: Modify UserModeScreen __init__ to accept initial_path
-                # but I already wrote UserModeScreen.
-                # Let's update UserModeScreen.on_mount to check a variable or just call navigate after push.
-
-                def navigate_after_mount():
-                     screen.tabs[0].left_path = path
-                     screen.tabs[0].right_path = path
-                     screen._load_tab_state()
-
-                self.app.call_later(navigate_after_mount)
             else:
                 self.notify(f"Directory not found: {path}", severity="error")

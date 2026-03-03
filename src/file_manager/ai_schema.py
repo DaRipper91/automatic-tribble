@@ -43,3 +43,15 @@ TAGS_SCHEMA = {
     },
     "required": ["suggestions"]
 }
+
+SEMANTIC_SEARCH_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "command": {"type": "string"},
+            "timestamp": {"type": "number"}
+        },
+        "required": ["command", "timestamp"]
+    }
+}

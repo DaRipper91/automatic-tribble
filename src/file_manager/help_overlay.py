@@ -51,9 +51,10 @@ class HelpOverlay(ModalScreen):
     #help-dialog {
         width: 80%;
         height: 80%;
-        background: $panel;
-        border: thick $primary;
-        padding: 1;
+        background: $surface;
+        border: round $primary;
+        padding: 2;
+        align: center middle;
     }
 
     .title {
@@ -104,8 +105,9 @@ class HelpOverlay(ModalScreen):
 
     .key-badge {
         background: $primary;
-        color: $text;
+        color: $background;
         text-style: bold;
+        padding: 0 1;
     }
 
     .action-desc {
