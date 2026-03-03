@@ -78,26 +78,37 @@ class GeminiClient:
         """
         Generate a multi-step plan from a user command.
         """
-        if not self.prompt_env:
-            return json.loads(self._mock_response(user_command, current_dir))
-
         # Get context
-        context = self.context_builder.get_context(current_dir)
+        context = self.context_builder.get_context(current_dir) if self.prompt_env else {}
 
-        # Prepare template
-        try:
-            template = self.prompt_env.get_template("planning.jinja2")
-            prompt = template.render(
-                current_dir=str(current_dir),
-                os_name=platform.system(),
-                directory_stats=context,
-                user_command=user_command
+        # Prepare prompt
+        prompt = None
+        if self.prompt_env:
+            try:
+                template = self.prompt_env.get_template("planning.jinja2")
+                prompt = template.render(
+                    current_dir=str(current_dir),
+                    os_name=platform.system(),
+                    directory_stats=context,
+                    user_command=user_command
+                )
+            except Exception as e:
+                logger.error(f"Error rendering prompt: {e}")
+
+        if prompt is None:
+            if not self.executor.is_available():
+                return json.loads(self._mock_response(user_command, current_dir))
+            prompt = (
+                f"You are TFM (The Future Manager), an advanced AI file automation assistant.\n"
+                f"Your goal is to interpret the user's natural language command and generate a structured JSON plan.\n"
+                f"Current directory: {current_dir}\n"
+                f"User command: {user_command}\n\n"
+                "Respond ONLY with a JSON object matching the plan schema.\n"
+                "Ensure all required fields are present and types are correct.\n"
+                "Do not include any explanation or markdown."
             )
-        except Exception as e:
-            logger.error(f"Error rendering prompt: {e}")
-            return json.loads(self._mock_response(user_command, current_dir))
 
-        # Call AI
+        # Call AI with retry
         max_retries = 3
         current_prompt = prompt
         last_error = ""
@@ -119,32 +130,26 @@ class GeminiClient:
                 logger.warning(f"Validation failed (attempt {attempt + 1}/{max_retries + 1}): {e}.")
 
                 if attempt < max_retries:
-                    # Retry with feedback
+                    # Retry with feedback; use template if available, fall back to inline string
+                    feedback_prompt = None
                     try:
-                        template = self.prompt_env.get_template("validation.jinja2")
-                        feedback_prompt = template.render(
-                            validation_error=last_error,
-                            user_command=user_command
-                        )
-                        current_prompt = f"{prompt}\n\n{feedback_prompt}"
+                        if self.prompt_env:
+                            template = self.prompt_env.get_template("validation.jinja2")
+                            feedback_prompt = template.render(
+                                validation_error=last_error,
+                                user_command=user_command
+                            )
                     except Exception as tpl_e:
-                        logger.error(f"Failed to load validation template: {tpl_e}")
-                        break # Cannot retry without template
-                else:
-                    logger.error("Max retries reached. Falling back to dummy plan.")
+                        logger.warning(f"Failed to load validation template: {tpl_e}")
 
-        # Fallback to graceful dummy plan with raw response
-        return {
-            "plan": [
-                {
-                    "step": 1,
-                    "action": "unknown",
-                    "params": {},
-                    "description": f"Failed to generate valid plan. Raw response:\n{last_response_text}\n\nPlease try rephrasing your command.",
-                    "is_destructive": False
-                }
-            ]
-        }
+                    if feedback_prompt is None:
+                        feedback_prompt = (
+                            f"Your previous response failed validation: {last_error}. "
+                            "Please fix and respond with valid JSON only."
+                        )
+                    current_prompt = f"{prompt}\n\n{feedback_prompt}"
+
+        raise ValueError(f"Invalid plan format: {last_error}")
 
     def _mock_response(self, command: str, current_dir: Path) -> str:
         """Generate a mock JSON response for testing."""
@@ -204,11 +209,14 @@ class GeminiClient:
         """
         action = step.get("action")
         params = step.get("params", {})
+        # Support flat step format (source/target at top level) as well as nested params
+        def _get(key, default=None):
+            return params.get(key, step.get(key, default))
 
         try:
             if action == "organize_by_type":
                 result = await self.organizer.organize_by_type(
-                    Path(params["source"]), Path(params["target"]), move=params.get("move", True), dry_run=dry_run
+                    Path(_get("source")), Path(_get("target")), move=_get("move", True), dry_run=dry_run
                 )
                 count = sum(len(files) for files in result.values())
                 action_str = "Would organize" if dry_run else "Organized"
@@ -216,7 +224,7 @@ class GeminiClient:
 
             elif action == "organize_by_date":
                 result = await self.organizer.organize_by_date(
-                     Path(params["source"]), Path(params["target"]), move=params.get("move", True), dry_run=dry_run
+                     Path(_get("source")), Path(_get("target")), move=_get("move", True), dry_run=dry_run
                 )
                 count = sum(len(files) for files in result.values())
                 action_str = "Would organize" if dry_run else "Organized"

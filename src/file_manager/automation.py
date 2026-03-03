@@ -391,7 +391,9 @@ class FileOrganizer:
 
                 try:
                     if not dry_run:
-                        await self.file_ops.rename(file_path, new_name)
+                        success = await self.file_ops.rename(file_path, new_name)
+                        if not success:
+                            continue
                     new_path = file_path.parent / new_name
                     renamed_files.append(new_path)
 

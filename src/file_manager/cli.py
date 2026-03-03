@@ -18,6 +18,7 @@ try:
     from rich.console import Console
     from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeRemainingColumn
     from rich.table import Table
+    from rich.prompt import Prompt
 except ImportError:
     print("Error: 'rich' library is required. Please install it.", file=sys.stderr)
     sys.exit(1)
@@ -220,9 +221,33 @@ async def handle_duplicates(args):
 
         if strategy == ConflictResolutionStrategy.INTERACTIVE:
              if args.json:
-                 pass
+                 print(json.dumps({"error": "Interactive mode not supported in JSON output"}, indent=2))
+                 return 1
              else:
-                 console.print("Interactive mode not supported in CLI.")
+                 for hash_val, files in duplicates.items():
+                     console.print(f"\nDuplicate group ({len(files)} files):", style="bold yellow")
+                     for i, path in enumerate(files, start=1):
+                         try:
+                             size = path.stat().st_size
+                             mtime = path.stat().st_mtime
+                         except OSError:
+                             size, mtime = 0, 0
+                         console.print(f"  {i}. {path}  ({size} bytes)")
+                     choice = Prompt.ask(
+                         f"Keep which file? (1-{len(files)}, or 's' to skip)",
+                         default="s"
+                     )
+                     try:
+                         keep_idx = int(choice) - 1
+                         if 0 <= keep_idx < len(files):
+                             for i, path in enumerate(files):
+                                 if i != keep_idx:
+                                     await organizer.file_ops.delete(path)
+                         else:
+                             console.print("[yellow]Invalid choice, skipping group.[/]")
+                     except (ValueError, TypeError):
+                         console.print("[yellow]Skipping group.[/]")
+                 return 0
         else:
              task = asyncio.create_task(organizer.resolve_duplicates(duplicates, strategy, progress_queue))
              if progress_queue:

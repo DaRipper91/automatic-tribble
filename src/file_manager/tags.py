@@ -147,6 +147,10 @@ class TagManager:
             logger.error(f"Failed to export tags: {e}")
             return {}
 
+    def export_tags(self) -> Dict[str, List[str]]:
+        """Export all tags as a dictionary {file_path: [tags]}."""
+        return self.get_all_tags_export()
+
     def cleanup_missing_files(self) -> int:
         """Remove entries for files that no longer exist."""
         removed_count = 0

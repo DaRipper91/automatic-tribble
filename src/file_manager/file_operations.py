@@ -166,6 +166,8 @@ class FileOperations:
                 shutil.copy2(str(source), str(target))
             self.history.log_operation(FileOperation(OperationType.COPY, source, target))
             return True
+        except TFMOperationConflictError:
+            raise
         except Exception as e:
             logger.error(f"Copy failed: {e}")
             return False
@@ -173,11 +175,17 @@ class FileOperations:
     async def delete(self, path: Path) -> bool:
         """Soft delete (move to trash)."""
         try:
+            if not path.exists():
+                raise TFMPathNotFoundError(str(path))
             trash_path = self.trash_dir / f"{uuid.uuid4()}_{path.name}"
             shutil.move(str(path), str(trash_path))
             self.history.log_operation(FileOperation(OperationType.DELETE, path, trash_path=trash_path))
             self.plugins.on_file_deleted(path)
             return True
+        except TFMPathNotFoundError:
+            raise
+        except PermissionError:
+            raise TFMPermissionError(str(path))
         except Exception as e:
             logger.error(f"Delete failed: {e}")
             return False
@@ -204,6 +212,33 @@ class FileOperations:
         except Exception as e:
             logger.error(f"Create directory failed: {e}")
             return False
+
+    def get_size(self, path: Path) -> int:
+        """Return size in bytes. For directories, recurse via recursive_scan."""
+        if not path.exists():
+            return 0
+        if path.is_file():
+            try:
+                return path.stat().st_size
+            except OSError:
+                return 0
+        total = 0
+        for entry in recursive_scan(path):
+            if entry.is_file(follow_symlinks=True):
+                try:
+                    total += entry.stat().st_size
+                except OSError:
+                    pass
+        return total
+
+    @staticmethod
+    def format_size(size: int) -> str:
+        """Convert bytes to a human-readable string."""
+        for unit in ("B", "KB", "MB", "GB", "TB"):
+            if size < 1024:
+                return f"{size:.1f} {unit}"
+            size /= 1024
+        return f"{size:.1f} PB"
 
     async def undo(self) -> str:
         """Undo the last operation."""
