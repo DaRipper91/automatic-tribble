@@ -117,16 +117,22 @@ class AIModeScreen(Screen):
         if self.history_index < len(self.history) - 1:
             self.history_index += 1
             cmd = self.history[-(self.history_index+1)]["command"]
-            self.query_one("#command_input", Input).value = cmd
+            inp = self.query_one("#command_input", Input)
+            inp.value = cmd
+            inp.action_end()
 
     def action_history_down(self):
         if self.history_index > 0:
             self.history_index -= 1
             cmd = self.history[-(self.history_index+1)]["command"]
-            self.query_one("#command_input", Input).value = cmd
+            inp = self.query_one("#command_input", Input)
+            inp.value = cmd
+            inp.action_end()
         elif self.history_index == 0:
             self.history_index = -1
-            self.query_one("#command_input", Input).value = ""
+            inp = self.query_one("#command_input", Input)
+            inp.value = ""
+            inp.action_end()
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -220,7 +226,7 @@ class AIModeScreen(Screen):
         try:
             plan_data = self.gemini_client.generate_plan(command, target_path)
 
-            if "fallback_text" in plan_data:
+            if "fallback_text" in plan_data and not plan_data.get("plan"):
                 fallback_msg = (
                     "[bold red]AI could not generate a valid plan after retries.[/bold red]\n"
                     "[bold yellow]Raw Output:[/bold yellow]\n"

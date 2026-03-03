@@ -82,7 +82,9 @@ async def test_execute_plan_step(gemini_client):
     step = {
         "step": 1,
         "action": "organize_by_type",
-        "params": {"source": "/tmp", "target": "/tmp/out", "move": False},
+        "source": "/tmp",
+        "target": "/tmp/out",
+        "move": False,
         "description": "Test step",
         "is_destructive": False
     }

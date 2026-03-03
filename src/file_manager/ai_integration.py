@@ -149,7 +149,12 @@ class GeminiClient:
                         )
                     current_prompt = f"{prompt}\n\n{feedback_prompt}"
 
-        raise ValueError(f"Invalid plan format: {last_error}")
+        # If all retries fail, return a fallback instead of raising an error.
+        return {
+            "fallback_text": last_response_text,
+            "error": last_error,
+            "plan": []
+        }
 
     def _mock_response(self, command: str, current_dir: Path) -> str:
         """Generate a mock JSON response for testing."""
@@ -208,10 +213,9 @@ class GeminiClient:
         Execute a single step from the plan.
         """
         action = step.get("action")
-        params = step.get("params", {})
-        # Support flat step format (source/target at top level) as well as nested params
+        # Support flat step format (source/target at top level)
         def _get(key, default=None):
-            return params.get(key, step.get(key, default))
+            return step.get(key, default)
 
         try:
             if action == "organize_by_type":
@@ -231,38 +235,38 @@ class GeminiClient:
                 return f"{action_str} {count} files by date."
 
             elif action == "cleanup_old_files":
-                is_dry = dry_run or params.get("dry_run", False)
+                is_dry = dry_run or _get("dry_run", False)
                 deleted = await self.organizer.cleanup_old_files(
-                    Path(params["directory"]), params.get("days", 30), params.get("recursive", False), is_dry
+                    Path(_get("directory")), _get("days", 30), _get("recursive", False), is_dry
                 )
                 prefix = "Would delete" if is_dry else "Deleted"
                 return f"{prefix} {len(deleted)} files."
 
             elif action == "find_duplicates":
                 duplicates = await self.organizer.find_duplicates(
-                    Path(params["directory"]), params.get("recursive", False)
+                    Path(_get("directory")), _get("recursive", False)
                 )
                 count = sum(len(files) for files in duplicates.values())
                 return f"Found {len(duplicates)} duplicate groups ({count} files)."
 
             elif action == "batch_rename":
                  renamed = await self.organizer.batch_rename(
-                     Path(params["directory"]), params["pattern"], params["replacement"], params.get("recursive", False), dry_run=dry_run
+                     Path(_get("directory")), _get("pattern"), _get("replacement"), _get("recursive", False), dry_run=dry_run
                  )
                  action_str = "Would rename" if dry_run else "Renamed"
                  return f"{action_str} {len(renamed)} files."
 
             elif action == "add_tag":
-                file_path = Path(params["file"])
-                tag = params["tag"]
+                file_path = Path(_get("file"))
+                tag = _get("tag")
                 if not dry_run:
                     self.tag_manager.add_tag(file_path, tag)
                 prefix = "Would add" if dry_run else "Added"
                 return f"{prefix} tag '{tag}' to {file_path.name}."
 
             elif action == "remove_tag":
-                file_path = Path(params["file"])
-                tag = params["tag"]
+                file_path = Path(_get("file"))
+                tag = _get("tag")
                 if not dry_run:
                     self.tag_manager.remove_tag(file_path, tag)
                 prefix = "Would remove" if dry_run else "Removed"
