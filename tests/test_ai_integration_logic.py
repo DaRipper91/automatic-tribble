@@ -9,8 +9,11 @@ class TestAIIntegration:
     def client(self):
         return GeminiClient()
 
-    def test_mock_response_generation(self, client):
-        # Test default mock response
+    @patch("src.file_manager.ai_integration.AIExecutor")
+    def test_mock_response_generation(self, mock_executor_cls, client):
+        # Test default mock response (simulate Gemini unavailable to force mock path)
+        mock_executor_cls.return_value.is_available.return_value = False
+        client.executor = mock_executor_cls.return_value
         plan_data = client.generate_plan("organize files by type", Path.cwd())
         assert "plan" in plan_data
         assert len(plan_data["plan"]) > 0
