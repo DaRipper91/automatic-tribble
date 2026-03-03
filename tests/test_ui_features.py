@@ -2,16 +2,14 @@
 Tests for UI features.
 """
 import pytest
-import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from textual.widgets import DirectoryTree, Label
+from textual.widgets import Label
 from textual.app import App, ComposeResult
 from src.file_manager.file_panel import MultiSelectDirectoryTree
 from src.file_manager.file_preview import FilePreview
 from src.file_manager.ui_components import EnhancedStatusBar
-from src.file_manager.user_mode import UserModeScreen
 from src.file_manager.help_overlay import HelpOverlay
 
 # Helper App for mounting widgets

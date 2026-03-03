@@ -1,8 +1,8 @@
 import json
 import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import patch
 from pathlib import Path
-from src.file_manager.ai_integration import GeminiClient, ResponseValidator
+from src.file_manager.ai_integration import GeminiClient
 
 class TestAIRetryLogic:
     @pytest.fixture

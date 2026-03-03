@@ -65,13 +65,21 @@ class ConfigManager:
 
             if not isinstance(categories, dict):
                 logger.warning("Invalid categories config format. Using defaults.")
-                return DEFAULT_CATEGORIES
+                return DEFAULT_CATEGORIES.copy()
 
-            return categories
+            # Merge with defaults
+            merged = DEFAULT_CATEGORIES.copy()
+            for cat, exts in categories.items():
+                if isinstance(exts, list):
+                    if cat in merged:
+                        merged[cat] = list(set(merged[cat] + exts))
+                    else:
+                        merged[cat] = exts
+            return merged
 
         except (yaml.YAMLError, OSError) as e:
             logger.error(f"Error loading categories config: {e}")
-            return DEFAULT_CATEGORIES
+            return DEFAULT_CATEGORIES.copy()
 
     def save_categories(self, categories: Dict[str, List[str]]) -> None:
         """Save categories to configuration file."""

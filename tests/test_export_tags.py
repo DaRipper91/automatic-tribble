@@ -1,7 +1,4 @@
 import pytest
-import json
-import sqlite3
-from pathlib import Path
 from src.file_manager.tags import TagManager
 
 @pytest.fixture
