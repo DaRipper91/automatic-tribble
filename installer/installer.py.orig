@@ -72,7 +72,7 @@ class WelcomeScreen(Screen):
                          env = "Arch Linux / CachyOS"
                      else:
                          env = "Generic Linux"
-             except Exception:
+             except:
                  pass
 
         self.query_one("#env-status", Label).update(f"Detected Environment: {env}")
@@ -94,7 +94,7 @@ class InstallScreen(Screen):
             yield Button("Finish", id="finish-btn", disabled=True, variant="success")
 
     def on_mount(self) -> None:
-        self.run_worker(self.run_install())
+        self.run_install()
 
     async def run_install(self) -> None:
         log = self.query_one("#log", RichLog)

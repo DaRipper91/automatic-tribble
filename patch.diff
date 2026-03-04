@@ -1,0 +1,11 @@
+--- installer/installer.py
++++ installer/installer.py
+@@ -72,7 +72,7 @@
+                          env = "Arch Linux / CachyOS"
+                      else:
+                          env = "Generic Linux"
+-             except:
++             except Exception:
+                  pass
+
+         self.query_one("#env-status", Label).update(f"Detected Environment: {env}")
