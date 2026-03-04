@@ -5,7 +5,7 @@ Automation features for file organization and management.
 import asyncio
 import hashlib
 from pathlib import Path
-from typing import Dict, List, Callable, Optional, Union, Iterator
+from typing import Dict, List, Callable, Optional, Iterator
 from datetime import datetime
 from enum import Enum, auto
 import os
@@ -334,17 +334,6 @@ class FileOrganizer:
 
         return deleted_files
 
-    def _scan_recursive(self, directory: Union[Path, str]):
-        """Recursively scan directory using os.scandir."""
-        try:
-            with os.scandir(directory) as it:
-                for entry in it:
-                    if entry.is_dir(follow_symlinks=False):
-                        yield from self._scan_recursive(entry.path)
-                    elif entry.is_file(follow_symlinks=True):
-                        yield entry
-        except (PermissionError, OSError):
-            pass
     
     def _iter_files(self, directory: Path, recursive: bool) -> Iterator[Path]:
         """
