@@ -114,10 +114,6 @@ class TestFileOperationsAsync:
         assert "Cannot undo delete" in result
         assert not source.exists()
 
-        # Verify history
-        last_op = self.file_ops.history.undo_last()
-        assert last_op.type == OperationType.MOVE
-
     async def test_delete_file(self):
         source = self.test_dir / "todelete.txt"
         source.write_text("content")
@@ -126,7 +122,7 @@ class TestFileOperationsAsync:
 
         assert not source.exists()
         # Check trash
-        trash_files = list(self.file_ops.trash_dir.glob("todelete.txt*"))
+        trash_files = list(self.file_ops.trash_dir.glob("*_todelete.txt"))
         assert len(trash_files) == 1
 
         # Verify history

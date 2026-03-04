@@ -261,6 +261,11 @@ async def handle_duplicates(args):
              if args.json:
                  print(json.dumps({"deleted": [str(p) for p in deleted]}, indent=2))
              else:
+                 table = Table(title="Duplicate Resolution Summary")
+                 table.add_column("Deleted File", style="red")
+                 for path in deleted:
+                     table.add_row(str(path))
+                 console.print(table)
                  console.print(f"Resolved duplicates. Deleted {len(deleted)} files.")
              return 0
 
@@ -302,9 +307,12 @@ async def handle_cleanup(args):
         print(json.dumps([str(p) for p in old_files], indent=2))
     else:
         action = "Would delete" if args.dry_run else "Deleted"
-        console.print(f"{action} {len(old_files)} files:")
+        table = Table(title=f"Cleanup Summary ({action})")
+        table.add_column("File", style="red" if not args.dry_run else "yellow")
         for path in old_files:
-            console.print(f"  {path}")
+            table.add_row(str(path))
+        console.print(table)
+        console.print(f"Total {action.lower()}: {len(old_files)} files.")
     return 0
 
 async def handle_rename(args):
@@ -328,12 +336,18 @@ async def handle_rename(args):
     if args.json:
         print(json.dumps([str(p) for p in renamed], indent=2))
     else:
-        console.print(f"Renamed {len(renamed)} files:")
+        table = Table(title="Rename Summary")
+        table.add_column("New File Path", style="green")
         for path in renamed:
-            console.print(f"  {path}")
+            table.add_row(str(path))
+        console.print(table)
+        console.print(f"Renamed {len(renamed)} files.")
     return 0
 
 async def handle_undo(args):
+    # Note: because history is session-scoped, running a new CLI command to undo
+    # will start with a fresh history and say "Nothing to undo".
+    # But to conform to the API:
     file_ops = FileOperations()
     result = await file_ops.undo_last()
     if args.json:

@@ -22,13 +22,17 @@ class TestConfigManager:
         assert (config_dir / "categories.yaml").exists()
 
     def test_load_existing(self, manager, config_dir):
+        from src.file_manager.config import DEFAULT_CATEGORIES
         custom_categories = {"custom": [".xyz"]}
         config_dir.mkdir(parents=True, exist_ok=True)
         with open(config_dir / "categories.yaml", "w") as f:
             yaml.dump(custom_categories, f)
 
         categories = manager.load_categories()
-        assert categories == custom_categories
+        assert "custom" in categories
+        assert ".xyz" in categories["custom"]
+        for k, v in DEFAULT_CATEGORIES.items():
+            assert k in categories
 
     def test_save_categories(self, manager, config_dir):
         custom_categories = {"custom": [".abc"]}

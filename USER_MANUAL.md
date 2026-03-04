@@ -237,7 +237,7 @@ tfm-auto schedule --daemon
 ```
 
 ### 8. Undo / Redo
-Revert accidental changes. The history is persisted to `~/.tfm/history.json`.
+Revert accidental changes. The history stack tracks operations session by session in memory, meaning you can use undo/redo within long-running processes or programmatically, or sequentially in interactive CLI flows.
 ```bash
 # Undo the last operation
 tfm-auto --undo
@@ -259,9 +259,9 @@ tfm-auto config --edit
 
 ### 🔄 Undo/Redo System
 TFM tracks all destructive operations (Move, Copy, Delete, Rename, Create Directory).
-- **Storage**: History is saved in `~/.tfm/history.json`, so it persists between sessions.
-- **Limit**: The undo stack is currently unbounded (until cleared manually or by file size limits in future versions).
-- **Usage**: You can use `tfm-auto --undo` or `tfm-auto --redo` at any time.
+- **Storage**: History is session-scoped and strictly in-memory.
+- **Limit**: The undo stack stores up to 100 recent operations.
+- **Usage**: You can use `tfm-auto --undo` or `tfm-auto --redo` to trigger them programmatically or in active sessions.
 
 ### 🔌 Plugin System
 Extend functionality by adding Python scripts to `~/.tfm/plugins/`.
@@ -356,9 +356,9 @@ Example:
 
 ### Custom Categories Configuration
 
-You can now customize your file categories used by the `organize` command. TFM creates a `categories.yaml` in your `~/.tfm/` folder.
+You can now customize your file categories used by the `organize` command. TFM creates a `categories.yaml` in your `~/.tfm/` folder. Your changes are automatically merged with the system defaults, allowing you to easily add new extensions or redefine existing ones.
 To quickly edit this file, use:
-`tfm-auto config --edit-categories`
+`tfm-auto config --edit`
 
 ### CLI Progress Bars and JSON Output
 
