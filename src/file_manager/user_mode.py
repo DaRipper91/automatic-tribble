@@ -49,6 +49,15 @@ class UserModeScreen(Screen):
         background: $panel;
         border-bottom: solid $primary;
     }
+    Tab {
+        background: $surface;
+        color: $text-muted;
+    }
+    Tab.-active {
+        background: $accent;
+        color: $background;
+        text-style: bold;
+    }
 
     Tab {
         color: $text-muted;
@@ -61,17 +70,13 @@ class UserModeScreen(Screen):
     }
 
     #preview-pane {
-        width: 0;
-        border: none;
-        height: 100%;
-        background: $surface-lighten-1;
         display: none;
+        width: 30%;
+        border-left: solid $primary;
+        height: 100%;
     }
 
     #preview-pane.visible {
-        width: 40%;
-        border-left: solid $primary;
-        padding: 0 1;
         display: block;
     }
     """

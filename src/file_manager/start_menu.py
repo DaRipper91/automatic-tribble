@@ -2,6 +2,8 @@
 Start Menu Screen for File Manager AI
 """
 from pathlib import Path
+import json
+import importlib.metadata
 from textual.app import ComposeResult
 from textual.screen import Screen
 from textual.widgets import Header, Footer, Button, Label, Static
@@ -78,11 +80,17 @@ class StartMenuScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
 
+        try:
+            version_str = importlib.metadata.version("termux-file-manager")
+            version_str = f"v{version_str}"
+        except importlib.metadata.PackageNotFoundError:
+            version_str = "v0.1.0"
+
         with Container(id="menu-container"):
             with Vertical():
                 # Logo and Version
                 yield Static(self.LOGO, id="logo")
-                yield Label("v0.1.0", id="version")
+                yield Label(version_str, id="version")
 
                 # Main Actions
                 yield Button("User Mode (File Manager)", id="user_mode", variant="primary", classes="menu-button")
@@ -100,23 +108,24 @@ class StartMenuScreen(Screen):
         """Load recent directories on mount."""
         recent_container = self.query_one("#recent-container", Vertical)
 
-        # We need to access ConfigManager via app
-        # Since we modified App to have config_manager, this should work
-        if hasattr(self.app, 'config_manager'):
-            recent_dirs = self.app.config_manager.load_recent_directories()
+        recent_file = Path.home() / ".tfm" / "recent.json"
+        recent_dirs = []
+        if recent_file.exists():
+            try:
+                with open(recent_file, "r") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        recent_dirs = data
+            except Exception:
+                pass
 
-            if not recent_dirs:
-                recent_container.mount(Label("No recent history", classes="text-muted"))
-            else:
-                for path in recent_dirs:
-                    btn = Button(str(path), classes="recent-btn", variant="default")
-                    btn.tooltip = f"Open {path}"
-                    # Store path in button ID or data?
-                    # IDs must be valid CSS identifiers, paths contain / etc.
-                    # We can use a custom attribute or just check label on press.
-                    # Textual buttons don't have arbitrary data storage easily accessible in event unless subclassed.
-                    # We can use the button's label text.
-                    recent_container.mount(btn)
+        if not recent_dirs:
+            recent_container.mount(Label("No recent history", classes="text-muted"))
+        else:
+            for path in recent_dirs[:5]:
+                btn = Button(str(path), classes="recent-btn", variant="default")
+                btn.tooltip = f"Open {path}"
+                recent_container.mount(btn)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         btn_id = event.button.id

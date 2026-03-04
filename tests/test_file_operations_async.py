@@ -14,7 +14,7 @@ class TestFileOperationsAsync:
         self.file_ops = FileOperations()
         # Mock trash dir to be inside temp dir
         self.file_ops.trash_dir = self.test_dir / ".trash"
-        self.file_ops._ensure_trash_dir()
+        self.file_ops.trash_dir.mkdir(parents=True, exist_ok=True)
         yield
         self.temp_dir.cleanup()
 
@@ -110,8 +110,8 @@ class TestFileOperationsAsync:
         if op.trash_path and op.trash_path.exists():
              op.trash_path.unlink()
 
-        result = await self.file_ops.undo_last()
-        assert "Cannot undo delete" in result
+        result = await self.file_ops.undo()
+        assert "Undo failed" in result
         assert not source.exists()
 
     async def test_delete_file(self):
@@ -162,7 +162,7 @@ class TestFileOperationsAsync:
         dest = self.test_dir / "dest.txt"
 
         await self.file_ops.copy(source, dest)
-        await self.file_ops.undo_last()
+        await self.file_ops.undo()
 
         assert not dest.exists()
         assert source.exists()
@@ -173,7 +173,7 @@ class TestFileOperationsAsync:
         dest = self.test_dir / "dest.txt"
 
         await self.file_ops.move(source, dest)
-        await self.file_ops.undo_last()
+        await self.file_ops.undo()
 
         assert source.exists()
         assert not dest.exists()
@@ -183,7 +183,7 @@ class TestFileOperationsAsync:
         source.write_text("content")
 
         await self.file_ops.delete(source)
-        await self.file_ops.undo_last()
+        await self.file_ops.undo()
 
         assert source.exists()
 
@@ -193,7 +193,7 @@ class TestFileOperationsAsync:
         new_name = "newname.txt"
 
         await self.file_ops.rename(source, new_name)
-        await self.file_ops.undo_last()
+        await self.file_ops.undo()
 
         assert source.exists()
         assert not (self.test_dir / new_name).exists()
@@ -202,7 +202,7 @@ class TestFileOperationsAsync:
         new_dir = self.test_dir / "newdir"
 
         await self.file_ops.create_directory(new_dir)
-        await self.file_ops.undo_last()
+        await self.file_ops.undo()
 
         assert not new_dir.exists()
 
@@ -212,8 +212,8 @@ class TestFileOperationsAsync:
         dest = self.test_dir / "dest.txt"
 
         await self.file_ops.copy(source, dest)
-        await self.file_ops.undo_last() # Undo
-        await self.file_ops.redo_last() # Redo
+        await self.file_ops.undo() # Undo
+        await self.file_ops.redo() # Redo
 
         assert dest.exists()
 
@@ -223,8 +223,8 @@ class TestFileOperationsAsync:
         dest = self.test_dir / "dest.txt"
 
         await self.file_ops.move(source, dest)
-        await self.file_ops.undo_last()
-        await self.file_ops.redo_last()
+        await self.file_ops.undo()
+        await self.file_ops.redo()
 
         assert dest.exists()
         assert not source.exists()
