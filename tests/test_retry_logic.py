@@ -51,8 +51,11 @@ class TestAIRetryLogic:
         # Always invalid
         mock_executor.execute_prompt.return_value = "INVALID"
 
-        with pytest.raises(ValueError, match="Invalid plan format"):
-            client.generate_plan("organize files", Path.cwd())
+        result = client.generate_plan("organize files", Path.cwd())
+
+        assert "fallback_text" in result
+        assert result["fallback_text"] == "INVALID"
+        assert result["plan"] == []
 
         # 1 initial + 3 retries = 4 calls
         assert mock_executor.execute_prompt.call_count == 4

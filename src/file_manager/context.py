@@ -23,6 +23,7 @@ class DirectoryStats:
     oldest_file: str
     newest_file: str
     top_largest_files: List[FileInfo]
+    top_5_largest: List[str]
     duplicate_groups: int
 
 class DirectoryContextBuilder:
@@ -118,6 +119,9 @@ class DirectoryContextBuilder:
         # Count duplicate groups (files with same size > 1)
         duplicate_groups = sum(1 for count in size_counts.values() if count > 1)
 
+        # Convert Top 5 Largest FileInfo to dict to match Jinja2 expected field `top_5_largest`
+        top_5_strs = [f"{f.name} ({f.size})" for f in top_largest]
+
         return DirectoryStats(
             total_files=total_files,
             total_size=total_size,
@@ -126,6 +130,7 @@ class DirectoryContextBuilder:
             oldest_file=oldest_name,
             newest_file=newest_name,
             top_largest_files=top_largest,
+            top_5_largest=top_5_strs,
             duplicate_groups=duplicate_groups
         )
 

@@ -99,11 +99,11 @@ class FileOperations:
 
     async def move(self, source: Path, target: Path) -> bool:
         """Move a file or directory."""
+        if not source.exists():
+             raise TFMPathNotFoundError(str(source))
+        if target.exists():
+            raise TFMOperationConflictError(f"Target already exists: {target}")
         try:
-            if not source.exists():
-                raise TFMPathNotFoundError(str(source))
-            if target.exists():
-                raise TFMOperationConflictError(f"Target already exists: {target}")
             await asyncio.to_thread(shutil.move, str(source), str(target))
             self.history.log_operation(FileOperation(OperationType.MOVE, source, target))
             self.plugins.on_file_added(target)
@@ -116,11 +116,12 @@ class FileOperations:
 
     async def copy(self, source: Path, target: Path) -> bool:
         """Copy a file or directory."""
+        if not source.exists():
+             raise TFMPathNotFoundError(str(source))
+        if target.exists():
+            raise TFMOperationConflictError(f"Target already exists: {target}")
         try:
-            if not source.exists():
-                raise TFMPathNotFoundError(str(source))
-            if target.exists():
-                raise TFMOperationConflictError(f"Target already exists: {target}")
+
             if source.is_dir():
                 await asyncio.to_thread(shutil.copytree, str(source), str(target))
             else:
@@ -136,16 +137,14 @@ class FileOperations:
 
     async def delete(self, path: Path) -> bool:
         """Soft delete (move to trash)."""
+        if not path.exists():
+             raise TFMPathNotFoundError(str(path))
         try:
-            if not path.exists():
-                raise TFMPathNotFoundError(str(path))
             trash_path = self.trash_dir / f"{uuid.uuid4()}_{path.name}"
             await asyncio.to_thread(shutil.move, str(path), str(trash_path))
             self.history.log_operation(FileOperation(OperationType.DELETE, path, trash_path=trash_path))
             self.plugins.on_file_deleted(path)
             return True
-        except TFMPathNotFoundError:
-            raise
         except PermissionError:
             raise TFMPermissionError(str(path))
         except Exception as e:
@@ -154,12 +153,12 @@ class FileOperations:
 
     async def rename(self, path: Path, new_name: str) -> bool:
         """Rename a file or directory."""
+        if not path.exists():
+             raise TFMPathNotFoundError(str(path))
+        target = path.parent / new_name
+        if target.exists():
+             raise TFMOperationConflictError(f"Target already exists: {target}")
         try:
-            if not path.exists():
-                raise TFMPathNotFoundError(str(path))
-            target = path.parent / new_name
-            if target.exists():
-                 raise TFMOperationConflictError(f"Target already exists: {target}")
             await asyncio.to_thread(path.rename, target)
             self.history.log_operation(FileOperation(OperationType.RENAME, path, target))
             return True
@@ -171,6 +170,8 @@ class FileOperations:
 
     async def create_directory(self, path: Path, exist_ok: bool = False) -> bool:
         """Create a new directory."""
+        if path.exists() and not exist_ok:
+             raise TFMOperationConflictError(f"Target already exists: {path}")
         try:
             if not exist_ok and path.exists():
                 raise TFMOperationConflictError(f"Target already exists: {path}")
@@ -229,7 +230,7 @@ class FileOperations:
                 return f"Undid copy: {op.target_path.name}"
             elif op.type == OperationType.DELETE and op.trash_path:
                 if not op.trash_path.exists():
-                    return f"Cannot undo delete: trash file missing for {op.original_path.name}"
+                    return f"Undo failed: trash file missing for {op.original_path.name}"
                 await asyncio.to_thread(shutil.move, str(op.trash_path), str(op.original_path))
                 return f"Restored from trash: {op.original_path.name}"
             elif op.type == OperationType.RENAME and op.target_path:
@@ -240,6 +241,8 @@ class FileOperations:
                      await asyncio.to_thread(shutil.rmtree, str(op.original_path))
                 return f"Undid directory creation: {op.original_path.name}"
         except Exception as e:
+            # Revert history if execution fails
+            self.history.redo_last()
             return f"Undo failed: {e}"
 
         return "Unknown operation type."
@@ -270,6 +273,12 @@ class FileOperations:
                 await asyncio.to_thread(op.original_path.mkdir, parents=True, exist_ok=True)
                 return f"Redid directory creation: {op.original_path.name}"
         except Exception as e:
+            # Revert history if execution fails
+            self.history.undo_last()
             return f"Redo failed: {e}"
 
         return "Unknown operation type."
+
+    # Short aliases expected by tests and TUI
+    undo = undo_last
+    redo = redo_last
