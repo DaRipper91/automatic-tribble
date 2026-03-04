@@ -247,7 +247,7 @@ async def test_scan_recursive(organizer, tmp_path):
     d1.mkdir()
     f1 = d1 / "f1.txt"
     f1.touch()
-    res = list(organizer._scan_recursive(tmp_path))
+    res = list(organizer._iter_files(tmp_path, recursive=True))
     assert len(res) == 1
     assert res[0].name == "f1.txt"
 

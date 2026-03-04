@@ -174,22 +174,26 @@ class FileOrganizer:
         Remove or identify files older than specified days.
         """
         cutoff_time = datetime.now().timestamp() - (days_old * SECONDS_PER_DAY)
-        old_files = []
         
-        def collect_files():
-            return list(self._iter_files(directory, recursive))
+        def collect_old_files() -> List[Path]:
+            old = []
+            for file_path in self._iter_files(directory, recursive):
+                try:
+                    if file_path.stat().st_mtime < cutoff_time:
+                        old.append(file_path)
+                except OSError as e:
+                    logger.debug(f"Failed to process {file_path} for cleanup: {e}")
+            return old
 
-        files = await asyncio.to_thread(collect_files)
+        old_files = await asyncio.to_thread(collect_old_files)
 
-        for file_path in files:
+        for file_path in old_files:
             try:
-                if file_path.stat().st_mtime < cutoff_time:
-                    old_files.append(file_path)
-                    if not dry_run:
-                        await self.file_ops.delete(file_path)
+                if not dry_run:
+                    await self.file_ops.delete(file_path)
 
-                    if progress_queue:
-                        await progress_queue.put(file_path)
+                if progress_queue:
+                    await progress_queue.put(file_path)
             except OSError as e:
                 logger.debug(f"Failed to process {file_path} for cleanup: {e}")
                 continue
