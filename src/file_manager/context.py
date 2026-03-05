@@ -27,7 +27,13 @@ class DirectoryStats:
     duplicate_groups: int
 
 class DirectoryContextBuilder:
-    """Builds and caches directory statistics for AI context."""
+    """
+    Builds and caches directory statistics for AI context.
+    Provides Context-Aware Directory Summarization by running a lightweight
+    background scan of the current directory. Injects structured summaries into
+    Gemini prompts, capturing total file count, size breakdown, oldest/newest files,
+    top 5 largest files, and duplicate groups, cached temporarily to avoid overhead.
+    """
 
     def __init__(self, cache_ttl: int = 60):
         self.cache_ttl = cache_ttl

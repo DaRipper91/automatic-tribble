@@ -220,7 +220,12 @@ class AIModeScreen(Screen):
 
     @work(thread=True)
     def _generate_plan_worker(self, command: str, target_path: Path, use_dry_run: bool = True) -> None:
-        """Generate a plan in background."""
+        """
+        Generate a multi-step task plan in background.
+        This feature interprets the user's natural language command and generates
+        a structured JSON plan. The plan is displayed to the user as a numbered
+        checklist before any execution begins, with an optional confirmation prompt.
+        """
         self.app.call_from_thread(self._log_message, f"[dim]Thinking... Context: {target_path}[/]")
 
         try:
@@ -242,7 +247,7 @@ class AIModeScreen(Screen):
                 self.app.call_from_thread(self._log_message, "[red]AI could not generate a plan.[/]")
                 return
 
-            # Display plan
+            # Display plan as a numbered checklist in the RichLog before any execution begins
             msg = "\n[bold purple]AI Proposed Plan:[/bold purple]\n"
             for step in self.current_plan:
                 icon = "🗑️" if step.get("is_destructive") else "📝"
