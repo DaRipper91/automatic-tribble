@@ -229,9 +229,9 @@ async def handle_duplicates(args):
                      for i, path in enumerate(files, start=1):
                          try:
                              size = path.stat().st_size
-                             mtime = path.stat().st_mtime
+
                          except OSError:
-                             size, mtime = 0, 0
+                             size = 0
                          console.print(f"  {i}. {path}  ({size} bytes)")
                      choice = Prompt.ask(
                          f"Keep which file? (1-{len(files)}, or 's' to skip)",

@@ -176,6 +176,9 @@ class HelpOverlay(ModalScreen):
             yield Label("Press Esc or h to close", classes="footer-tip")
 
     def on_mount(self) -> None:
+        container = self.query_one("#help-dialog")
+        container.styles.opacity = 0.0
+        container.styles.animate("opacity", 1.0, duration=0.2)
         self.refresh_shortcuts()
 
     def refresh_shortcuts(self, query: str = "") -> None:
