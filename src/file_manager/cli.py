@@ -449,7 +449,7 @@ async def handle_schedule(args):
         for job in jobs:
             last_run = "Never"
             if job["last_run"]:
-                last_run = datetime.fromtimestamp(job["last_run"]).strftime("%Y-%m-%d %H:%M")
+                last_run = datetime.fromtimestamp(job["last_run"])
             table.add_row(job["name"], job["cron"], job["type"], last_run)
         console.print(table)
 
