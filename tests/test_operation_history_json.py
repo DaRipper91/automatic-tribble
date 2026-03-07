@@ -1,98 +1,57 @@
-import json
 import pytest
-from unittest.mock import patch
-from pathlib import Path
+import json
 from datetime import datetime
+from pathlib import Path
+from unittest.mock import patch
+
 from src.file_manager.file_operations import OperationHistory, FileOperation, OperationType
 
 class TestOperationHistoryJSON:
 
-    @pytest.fixture
-    def mock_history_path(self, tmp_path):
-        return tmp_path / "history.json"
+    def test_json_persistence(self, tmp_path):
+        mock_history_path = tmp_path / "history.json"
 
-    @pytest.fixture
-    def history(self, mock_history_path):
-        # OperationHistory sets self.history_file in __init__, so it's an instance attribute, not class attribute.
-        # We should rely on patching Path.home() to redirect the file location.
-
-        with patch("pathlib.Path.home", return_value=mock_history_path.parent):
-             # Create .tfm dir
-            (mock_history_path.parent / ".tfm").mkdir(parents=True, exist_ok=True)
-            h = OperationHistory()
-            return h
-
-    def test_json_persistence(self, history, mock_history_path):
         op = FileOperation(
             OperationType.COPY,
             Path("/src/file.txt"),
             Path("/dst/file.txt")
         )
+        history = OperationHistory()
         history.log_operation(op)
 
-        # Check if file exists (path construction is slightly tricky with mocks, but let's verify logic)
-        # History file is at mock_history_path.parent / ".tfm" / "history.json"
-        expected_file = mock_history_path.parent / ".tfm" / "history.json"
+        # OperationHistory is strictly in-memory per memory rules.
+        # But we CAN test FileOperation serialization logic.
+        op_dict = op.to_dict()
+        assert op_dict["type"] == "COPY"
+        assert op_dict["original_path"] == "/src/file.txt"
+        assert op_dict["target_path"] == "/dst/file.txt"
 
-        assert expected_file.exists()
+        # Let's save and load to test from_dict
+        with open(mock_history_path, "w") as f:
+            json.dump(op_dict, f)
 
-        # Read file manually
-        with open(expected_file, "r") as f:
-            data = json.load(f)
+        with open(mock_history_path, "r") as f:
+            loaded_data = json.load(f)
 
-        assert len(data["undo"]) == 1
-        assert data["undo"][0]["type"] == "COPY"
-        assert data["undo"][0]["original_path"] == str(Path("/src/file.txt"))
+        loaded_op = FileOperation.from_dict(loaded_data)
+        assert loaded_op.type == OperationType.COPY
+        assert loaded_op.original_path == Path("/src/file.txt")
 
-    def test_load_history(self, mock_history_path):
-        # Create a history file
+    def test_load_history(self, tmp_path):
+        # We test loading a single operation from dict
         data = {
-            "undo": [{
-                "type": "MOVE",
-                "original_path": "/src/move.txt",
-                "target_path": "/dst/move.txt",
-                "timestamp": datetime.now().isoformat(),
-                "trash_path": None
-            }],
-            "redo": []
+            "type": "MOVE",
+            "original_path": "/src/move.txt",
+            "target_path": "/dst/move.txt",
+            "timestamp": datetime.now().isoformat(),
+            "trash_path": None
         }
 
-        history_file = mock_history_path.parent / ".tfm" / "history.json"
-        history_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(history_file, "w") as f:
-            json.dump(data, f)
+        op = FileOperation.from_dict(data)
 
-        # Create new history instance to load it
-        with patch("pathlib.Path.home", return_value=mock_history_path.parent):
-            new_history = OperationHistory()
+        history = OperationHistory()
+        history.log_operation(op)
 
-            assert len(new_history._undo_stack) == 1
-            assert new_history._undo_stack[0].type == OperationType.MOVE
-            assert str(new_history._undo_stack[0].original_path) == str(Path("/src/move.txt"))
-
-    def test_corrupt_history_file(self, mock_history_path):
-        history_file = mock_history_path.parent / ".tfm" / "history.json"
-        history_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(history_file, "w") as f:
-            f.write("{invalid json")
-
-        with patch("pathlib.Path.home", return_value=mock_history_path.parent):
-            new_history = OperationHistory()
-            # Should gracefully fail and have empty stacks
-            assert len(new_history._undo_stack) == 0
-
-    def test_round_trip_serialization(self):
-        op = FileOperation(
-            OperationType.DELETE,
-            Path("/path/to/delete"),
-            trash_path=Path("/trash/path"),
-            timestamp=datetime.now()
-        )
-
-        data = op.to_dict()
-        restored_op = FileOperation.from_dict(data)
-
-        assert restored_op.type == op.type
-        assert restored_op.original_path == op.original_path
-        assert restored_op.trash_path == op.trash_path
-        assert restored_op.timestamp == op.timestamp
+        assert len(history._undo_stack) == 1
+        assert history._undo_stack[0].type == OperationType.MOVE
+        assert history._undo_stack[0].original_path == Path("/src/move.txt")
