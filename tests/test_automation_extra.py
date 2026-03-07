@@ -241,7 +241,6 @@ async def test_compute_file_hash_oserror(organizer, tmp_path):
     with pytest.raises(OSError):
         organizer._compute_file_hash(f1)
 
-<<<<<<< HEAD
 @pytest.mark.asyncio
 async def test_scan_recursive(organizer, tmp_path):
     from src.file_manager.utils import recursive_scan
@@ -251,23 +250,10 @@ async def test_scan_recursive(organizer, tmp_path):
     f1.touch()
     from src.file_manager.utils import recursive_scan
     res = list(recursive_scan(tmp_path))
-    # It yields both directories and files, filter for file
-    res_files = [e for e in res if e.is_file()]
-    assert len(res_files) == 1
-    assert res_files[0].name == "f1.txt"
-||||||| 0af777b
-@pytest.mark.asyncio
-async def test_scan_recursive(organizer, tmp_path):
-    d1 = tmp_path / "d1"
-    d1.mkdir()
-    f1 = d1 / "f1.txt"
-    f1.touch()
-    res = list(organizer._scan_recursive(tmp_path))
-    assert len(res) == 1
-    assert res[0].name == "f1.txt"
-=======
-
->>>>>>> ui-overhaul-10512029734387015718
+    assert len(res) == 2
+    names = [r.name for r in res]
+    assert "d1" in names
+    assert "f1.txt" in names
 
 @pytest.mark.asyncio
 async def test_find_duplicates_symlink(organizer, tmp_path):
