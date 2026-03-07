@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 # Add src directory to path
-src_dir = Path(__file__).parent / "src"
+src_dir = Path(__file__).resolve().parent / "src"
 sys.path.insert(0, str(src_dir))
 
 from file_manager.app import main  # noqa: E402
