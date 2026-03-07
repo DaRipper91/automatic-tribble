@@ -206,11 +206,12 @@ class FileOperations:
     @staticmethod
     def format_size(size: int) -> str:
         """Convert bytes to a human-readable string."""
+        current_size = float(size)
         for unit in ("B", "KB", "MB", "GB", "TB"):
-            if size < 1024:
-                return f"{size:.1f} {unit}"
-            size /= 1024
-        return f"{size:.1f} PB"
+            if current_size < 1024:
+                return f"{current_size:.1f} {unit}"
+            current_size /= 1024
+        return f"{current_size:.1f} PB"
 
     async def undo_last(self) -> str:
         """Undo the last operation."""

@@ -23,7 +23,7 @@ def setup_logging(level: str = "INFO", log_file: Optional[str] = None) -> loggin
         file_handler.setFormatter(
             logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         )
-        handlers.append(file_handler)
+        handlers.append(file_handler) # type: ignore
 
     logging.basicConfig(
         level=level,
