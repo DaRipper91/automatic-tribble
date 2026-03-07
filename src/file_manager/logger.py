@@ -16,7 +16,7 @@ def setup_logging(level: str = "INFO", log_file: Optional[str] = None) -> loggin
     Returns:
         The configured root logger.
     """
-    handlers = [RichHandler(rich_tracebacks=True, markup=True)]
+    handlers: list[logging.Handler] = [RichHandler(rich_tracebacks=True, markup=True)]
 
     if log_file:
         file_handler = logging.FileHandler(log_file)

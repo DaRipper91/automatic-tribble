@@ -2,7 +2,7 @@
 User Mode Screen - Standard File Manager Interface with Tabs, Preview, and Multi-Selection.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Any
 from pathlib import Path
 import shutil
 import logging
@@ -174,7 +174,9 @@ class UserModeScreen(Screen):
             current_id = tabs.active
             current_index = [p.id for p in panes].index(current_id)
             next_index = (current_index + 1) % len(panes)
-            tabs.active = panes[next_index].id
+            next_id = panes[next_index].id
+            if next_id is not None:
+                tabs.active = next_id
         except ValueError:
             pass
 
@@ -199,14 +201,15 @@ class UserModeScreen(Screen):
             self._update_preview()
 
     def action_switch_theme(self) -> None:
-        current_theme = self.app.config_manager.get_theme()
+        app_any: Any = self.app
+        current_theme = app_any.config_manager.get_theme()
 
         def on_theme_selected(theme: Optional[str]) -> None:
             if theme:
-                self.app.config_manager.set_theme(theme)
-                self.app.load_theme_by_name(theme)
+                app_any.config_manager.set_theme(theme)
+                app_any.load_theme_by_name(theme)
             else:
-                self.app.load_theme_by_name(current_theme)
+                app_any.load_theme_by_name(current_theme)
 
         self.app.push_screen(ThemeSwitcher(current_theme), on_theme_selected)
 
@@ -462,7 +465,7 @@ class UserModeScreen(Screen):
             if tabs.active:
                 try:
                     pane = tabs.get_pane(tabs.active)
-                    pane.label = f"{active_panel.current_dir.name or '/'} [X]"
+                    setattr(pane, "label", f"{active_panel.current_dir.name or '/'} [X]")
                 except Exception:
                     pass
 
@@ -487,7 +490,7 @@ class UserModeScreen(Screen):
             if tabs.active:
                 try:
                     pane = tabs.get_pane(tabs.active)
-                    pane.label = f"{active_panel.current_dir.name or '/'} [X]"
+                    setattr(pane, "label", f"{active_panel.current_dir.name or '/'} [X]")
                 except Exception:
                     pass
         self._focus_active_panel()
