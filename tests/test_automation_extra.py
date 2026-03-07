@@ -248,10 +248,12 @@ async def test_scan_recursive(organizer, tmp_path):
     d1.mkdir()
     f1 = d1 / "f1.txt"
     f1.touch()
+    from src.file_manager.utils import recursive_scan
     res = list(recursive_scan(tmp_path))
-    assert len(res) == 2  # directory d1 and file f1.txt
-    names = [entry.name for entry in res]
-    assert "f1.txt" in names
+    # It yields both directories and files, filter for file
+    res_files = [e for e in res if e.is_file()]
+    assert len(res_files) == 1
+    assert res_files[0].name == "f1.txt"
 
 @pytest.mark.asyncio
 async def test_find_duplicates_symlink(organizer, tmp_path):

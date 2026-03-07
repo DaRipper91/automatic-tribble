@@ -8,6 +8,7 @@ import shutil
 import logging
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
+from typing import Any
 from textual.widgets import Header, Footer, TabbedContent, TabPane, Tree, ProgressBar
 from textual.binding import Binding
 from textual.reactive import reactive
@@ -145,7 +146,8 @@ class UserModeScreen(Screen):
             path = self.initial_path
 
         tabs = self.query_one(TabbedContent)
-        pane = TabPane(f"{path.name or 'Tab'} [X]", id=new_id)
+        pane_label = f"{path.name or 'Tab'} [X]"
+        pane = TabPane(pane_label, id=new_id)
         tabs.add_pane(pane)
         # Mount the DualFilePanes into the new pane
         pane.mount(DualFilePanes(path, path, id=f"dual-panes-{new_id}"))
@@ -172,6 +174,10 @@ class UserModeScreen(Screen):
 
         try:
             current_id = tabs.active
+            if current_id is None:
+                if panes[0].id is not None:
+                    tabs.active = panes[0].id
+                return
             current_index = [p.id for p in panes].index(current_id)
             next_index = (current_index + 1) % len(panes)
             next_id = panes[next_index].id
