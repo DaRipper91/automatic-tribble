@@ -8,7 +8,7 @@ import asyncio
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 from dataclasses import dataclass, field
 
 from .utils import recursive_scan
@@ -34,7 +34,7 @@ class FileOperation:
     timestamp: datetime = field(default_factory=datetime.now)
     trash_path: Optional[Path] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
             "type": self.type.name,
@@ -45,7 +45,7 @@ class FileOperation:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'FileOperation':
+    def from_dict(cls, data: dict) -> 'FileOperation':
         """Create from dictionary."""
         return cls(
             type=OperationType[data["type"]],

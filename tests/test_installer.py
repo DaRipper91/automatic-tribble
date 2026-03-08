@@ -8,7 +8,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../i
 
 try:
     from installer import InstallScreen
-    from textual.app import App
 except ImportError:
     pass
 

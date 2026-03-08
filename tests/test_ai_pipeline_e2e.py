@@ -1,12 +1,11 @@
 import json
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, MagicMock
 
-from src.file_manager.ai_integration import GeminiClient
 from src.file_manager.ai_mode import AIModeScreen
 from textual.app import App
-from textual.widgets import Input, Button, RichLog, Checkbox
+from textual.widgets import Input, RichLog, Checkbox
 
 class MockApp(App):
     def compose(self):
