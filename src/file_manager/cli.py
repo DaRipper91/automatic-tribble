@@ -9,6 +9,8 @@ import sys
 import json
 import os
 import subprocess
+import shutil
+import shlex
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -31,6 +33,45 @@ from .tags import TagManager
 from .scheduler import TaskScheduler
 
 console = Console()
+
+# Security: Whitelist of allowed terminal-based editors
+ALLOWED_EDITORS = [
+    "nano", "vim", "vi", "emacs", "joe", "nvim", "pico", "ed", "micro"
+]
+
+def get_safe_editor() -> str:
+    """
+    Retrieves and validates the EDITOR environment variable.
+    Returns a safe editor path or name, falling back to 'nano' if invalid or not allowed.
+    """
+    editor_env = os.environ.get('EDITOR', 'nano')
+    if not editor_env:
+        return 'nano'
+
+    # Handle cases where EDITOR might have arguments (e.g., "vim -u NONE")
+    try:
+        parts = shlex.split(editor_env)
+        if not parts:
+            return 'nano'
+        editor_cmd = parts[0]
+    except ValueError:
+        return 'nano'
+
+    # Get the basename of the editor command (e.g., "/usr/bin/vim" -> "vim")
+    editor_name = os.path.basename(editor_cmd)
+
+    # Check against whitelist
+    if editor_name not in ALLOWED_EDITORS:
+        return 'nano'
+
+    # Ensure the editor is available in the system PATH
+    if not shutil.which(editor_cmd):
+        # If the specific command/path isn't found, try finding the name in PATH
+        if not shutil.which(editor_name):
+            return 'nano'
+        return editor_name
+
+    return editor_env
 
 def setup_parser():
     """Set up the argument parser."""
@@ -373,8 +414,17 @@ async def handle_config(args):
         return 0
 
     if args.edit:
-        editor = os.environ.get('EDITOR', 'nano')
-        subprocess.call([editor, str(config_path)])
+        editor = get_safe_editor()
+        # If get_safe_editor returned a full command with args, we need to handle it correctly
+        # But subprocess.call([editor, str(config_path)]) expects 'editor' to be just the executable.
+        # If editor was 'vim -u NONE', then we'd want ['vim', '-u', 'NONE', config_path]
+        try:
+            cmd_parts = shlex.split(editor)
+            cmd_parts.append(str(config_path))
+            subprocess.call(cmd_parts)
+        except Exception as e:
+            console.print(f"[red]Error launching editor: {e}[/red]")
+            return 1
     else:
         console.print(f"Configuration file: {config_path}")
         categories = config_manager.load_categories()
