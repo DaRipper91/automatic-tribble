@@ -55,6 +55,55 @@ class TestAIIntegration:
         with pytest.raises(ValueError):
              ResponseValidator.validate_plan(invalid_json)
 
+    def test_validate_search_success(self):
+        valid_json = '{"indices": [0, 2, 5]}'
+        data = ResponseValidator.validate_search(valid_json)
+        assert data["indices"] == [0, 2, 5]
+
+    def test_validate_search_markdown(self):
+        markdown_json = "```json\n{\"indices\": [1]}\n```"
+        data = ResponseValidator.validate_search(markdown_json)
+        assert data["indices"] == [1]
+
+    def test_validate_search_failure(self):
+        # Invalid syntax
+        with pytest.raises(ValueError, match="Invalid search format"):
+            ResponseValidator.validate_search("{ invalid")
+
+        # Missing required field
+        with pytest.raises(ValueError, match="Invalid search format"):
+            ResponseValidator.validate_search('{"wrong": []}')
+
+        # Wrong type
+        with pytest.raises(ValueError, match="Invalid search format"):
+            ResponseValidator.validate_search('{"indices": ["not-an-int"]}')
+
+    def test_validate_tags_success(self):
+        valid_json = """
+        {
+          "suggestions": [
+            {"file": "test.txt", "tags": ["work", "important"]}
+          ]
+        }
+        """
+        data = ResponseValidator.validate_tags(valid_json)
+        assert data["suggestions"][0]["file"] == "test.txt"
+        assert "work" in data["suggestions"][0]["tags"]
+
+    def test_validate_tags_failure(self):
+        # Invalid syntax
+        with pytest.raises(ValueError, match="Invalid tags format"):
+            ResponseValidator.validate_tags("not json")
+
+        # Missing suggestions
+        with pytest.raises(ValueError, match="Invalid tags format"):
+            ResponseValidator.validate_tags('{"wrong": []}')
+
+        # Missing required field in suggestion
+        invalid_item = '{"suggestions": [{"file": "only-file"}]}'
+        with pytest.raises(ValueError, match="Invalid tags format"):
+            ResponseValidator.validate_tags(invalid_item)
+
     @patch("src.file_manager.ai_integration.AIExecutor")
     def test_retry_logic(self, mock_executor_cls, client):
         # Setup mock executor

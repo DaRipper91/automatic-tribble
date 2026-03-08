@@ -10,7 +10,13 @@ from typing import List, Optional, Tuple, Dict
 logger = logging.getLogger(__name__)
 
 class TagManager:
-    """Manages file tags using a SQLite database."""
+    """
+    Manages file tags using a SQLite database.
+    This component implements AI-Powered File Tagging and Smart Collections.
+    It is backed by a local SQLite database (typically at ~/.tfm/tags.db).
+    It supports creating, listing, searching, exporting, and managing custom tags
+    based on natural language commands or AI suggestions from filenames and context.
+    """
 
     def __init__(self, db_path: Optional[Path] = None):
         if db_path is None:
@@ -160,10 +166,14 @@ class TagManager:
                 cursor.execute("SELECT DISTINCT file_path FROM tags")
                 files = cursor.fetchall()
 
-                for (path_str,) in files:
-                    if not Path(path_str).exists():
-                        cursor.execute("DELETE FROM tags WHERE file_path = ?", (path_str,))
-                        removed_count += cursor.rowcount
+                to_delete = [
+                    (path_str,) for (path_str,) in files
+                    if not Path(path_str).exists()
+                ]
+
+                if to_delete:
+                    cursor.executemany("DELETE FROM tags WHERE file_path = ?", to_delete)
+                    removed_count = cursor.rowcount
 
                 conn.commit()
         except sqlite3.Error as e:

@@ -243,11 +243,13 @@ async def test_compute_file_hash_oserror(organizer, tmp_path):
 
 @pytest.mark.asyncio
 async def test_scan_recursive(organizer, tmp_path):
+    from src.file_manager.utils import recursive_scan
     d1 = tmp_path / "d1"
     d1.mkdir()
     f1 = d1 / "f1.txt"
     f1.touch()
-    res = list(organizer._scan_recursive(tmp_path))
+    from src.file_manager.utils import recursive_scan
+    res = [r for r in recursive_scan(tmp_path) if r.is_file()]
     assert len(res) == 1
     assert res[0].name == "f1.txt"
 

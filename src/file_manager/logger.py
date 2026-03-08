@@ -16,14 +16,14 @@ def setup_logging(level: str = "INFO", log_file: Optional[str] = None) -> loggin
     Returns:
         The configured root logger.
     """
-    handlers = [RichHandler(rich_tracebacks=True, markup=True)]
+    handlers: list[logging.Handler] = [RichHandler(rich_tracebacks=True, markup=True)]
 
     if log_file:
         file_handler = logging.FileHandler(log_file)
         file_handler.setFormatter(
             logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
         )
-        handlers.append(file_handler)
+        handlers.append(file_handler) # type: ignore
 
     logging.basicConfig(
         level=level,

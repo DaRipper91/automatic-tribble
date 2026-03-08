@@ -36,8 +36,10 @@ class ResponseValidator:
             data = json.loads(clean_text)
             validate(instance=data, schema=schema)
             return data
-        except (json.JSONDecodeError, ValidationError) as e:
-            raise ValueError(f"Invalid {schema_name} format: {str(e)}")
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid {schema_name} format (JSON Decode Error): {str(e)}")
+        except ValidationError as e:
+            raise ValueError(f"Invalid {schema_name} format (Schema Validation Error): {str(e)}")
 
     @staticmethod
     def validate_plan(response_text: str) -> Dict[str, Any]:

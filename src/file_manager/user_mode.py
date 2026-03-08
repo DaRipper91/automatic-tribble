@@ -2,12 +2,13 @@
 User Mode Screen - Standard File Manager Interface with Tabs, Preview, and Multi-Selection.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Any
 from pathlib import Path
 import shutil
 import logging
 from textual.app import ComposeResult
 from textual.containers import Container, Horizontal
+from typing import Any
 from textual.widgets import Header, Footer, TabbedContent, TabPane, Tree, ProgressBar
 from textual.binding import Binding
 from textual.reactive import reactive
@@ -145,7 +146,8 @@ class UserModeScreen(Screen):
             path = self.initial_path
 
         tabs = self.query_one(TabbedContent)
-        pane = TabPane(f"{path.name or 'Tab'} [X]", id=new_id)
+        pane_label = f"{path.name or 'Tab'} [X]"
+        pane = TabPane(pane_label, id=new_id)
         tabs.add_pane(pane)
         # Mount the DualFilePanes into the new pane
         pane.mount(DualFilePanes(path, path, id=f"dual-panes-{new_id}"))
@@ -172,9 +174,15 @@ class UserModeScreen(Screen):
 
         try:
             current_id = tabs.active
+            if current_id is None:
+                if panes[0].id is not None:
+                    tabs.active = panes[0].id
+                return
             current_index = [p.id for p in panes].index(current_id)
             next_index = (current_index + 1) % len(panes)
-            tabs.active = panes[next_index].id
+            next_id = panes[next_index].id
+            if next_id is not None:
+                tabs.active = next_id
         except ValueError:
             pass
 
@@ -199,14 +207,15 @@ class UserModeScreen(Screen):
             self._update_preview()
 
     def action_switch_theme(self) -> None:
-        current_theme = self.app.config_manager.get_theme()
+        app_any: Any = self.app
+        current_theme = app_any.config_manager.get_theme()
 
         def on_theme_selected(theme: Optional[str]) -> None:
             if theme:
-                self.app.config_manager.set_theme(theme)
-                self.app.load_theme_by_name(theme)
+                app_any.config_manager.set_theme(theme)
+                app_any.load_theme_by_name(theme)
             else:
-                self.app.load_theme_by_name(current_theme)
+                app_any.load_theme_by_name(current_theme)
 
         self.app.push_screen(ThemeSwitcher(current_theme), on_theme_selected)
 
@@ -462,7 +471,7 @@ class UserModeScreen(Screen):
             if tabs.active:
                 try:
                     pane = tabs.get_pane(tabs.active)
-                    pane.label = f"{active_panel.current_dir.name or '/'} [X]"
+                    setattr(pane, "label", f"{active_panel.current_dir.name or '/'} [X]")
                 except Exception:
                     pass
 
@@ -487,7 +496,7 @@ class UserModeScreen(Screen):
             if tabs.active:
                 try:
                     pane = tabs.get_pane(tabs.active)
-                    pane.label = f"{active_panel.current_dir.name or '/'} [X]"
+                    setattr(pane, "label", f"{active_panel.current_dir.name or '/'} [X]")
                 except Exception:
                     pass
         self._focus_active_panel()

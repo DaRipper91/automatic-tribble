@@ -46,7 +46,10 @@ class FileManagerApp(App):
             theme_path = Path(__file__).parent / "themes" / f"{theme_name}.tcss"
             if theme_path.exists():
                 with open(theme_path, "r") as f:
-                    self.stylesheet.add_source(f.read())
+                    theme_css = f.read()
+                    # Add new theme variables. Textual resolves CSS cascades,
+                    # so adding it as a source overrides existing variables.
+                    self.stylesheet.add_source(theme_css, is_default_css=False)
                     self.refresh_css()
         except Exception as e:
             # Fallback to defaults if theme loading fails

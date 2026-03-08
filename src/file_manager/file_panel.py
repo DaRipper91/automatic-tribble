@@ -3,8 +3,10 @@ File panel widget for displaying and navigating files with multi-selection.
 """
 
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional, Set, Any
 from textual.widgets import DirectoryTree, Static
+from textual.widgets.tree import TreeNode
+from textual.widgets._directory_tree import DirEntry
 from textual.containers import Vertical, Container
 from textual.reactive import reactive
 from textual.binding import Binding
@@ -31,7 +33,7 @@ class MultiSelectDirectoryTree(DirectoryTree):
     def __init__(self, path: str, **kwargs):
         super().__init__(path, **kwargs)
         self.selected_paths: Set[Path] = set()
-        self._anchor_node = None
+        self._anchor_node: Optional[TreeNode[DirEntry]] = None
 
     def on_mount(self) -> None:
         super().on_mount()

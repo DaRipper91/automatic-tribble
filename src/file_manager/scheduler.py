@@ -16,7 +16,14 @@ from .automation import FileOrganizer
 logger = logging.getLogger(__name__)
 
 class TaskScheduler:
-    """Manages scheduled automation tasks."""
+    """
+    Manages scheduled automation tasks.
+    Implements Scheduled Automation via a cron-style task registry.
+    Users define recurring automation jobs (stored in ~/.tfm/schedule.json),
+    each having a name, a cron expression, a target directory, and a task type
+    like organize_by_type, organize_by_date, cleanup, or duplicates.
+    It can be run as a standalone daemon checking due tasks every minute.
+    """
 
     def __init__(self, schedule_file: Optional[Path] = None):
         if schedule_file is None:
