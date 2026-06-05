@@ -6,7 +6,7 @@ from typing import Optional, Union, Generator
 def format_size(size_bytes: int) -> str:
     """Format size in bytes to human readable string."""
     f_size: float = float(size_bytes)
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB', 'PB']:
+    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
         if f_size < 1024.0:
             return f"{f_size:.1f} {unit}"
         f_size /= 1024.0

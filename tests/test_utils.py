@@ -1,6 +1,31 @@
 import unittest
 from unittest.mock import patch
-from src.file_manager.utils import find_gemini_executable
+from src.file_manager.utils import find_gemini_executable, format_size
+
+class TestFormatSize(unittest.TestCase):
+    def test_format_size_zero(self):
+        self.assertEqual(format_size(0), "0.0 B")
+
+    def test_format_size_bytes(self):
+        self.assertEqual(format_size(1023), "1023.0 B")
+
+    def test_format_size_kilobytes(self):
+        self.assertEqual(format_size(1024), "1.0 KB")
+
+    def test_format_size_megabytes(self):
+        self.assertEqual(format_size(1024**2), "1.0 MB")
+
+    def test_format_size_gigabytes(self):
+        self.assertEqual(format_size(1024**3), "1.0 GB")
+
+    def test_format_size_terabytes(self):
+        self.assertEqual(format_size(1024**4), "1.0 TB")
+
+    def test_format_size_petabytes(self):
+        self.assertEqual(format_size(1024**5), "1.0 PB")
+
+    def test_format_size_exceeding_petabytes(self):
+        self.assertEqual(format_size(1024**6), "1024.0 PB")
 
 class TestFindGeminiExecutable(unittest.TestCase):
     @patch('src.file_manager.utils.shutil.which')
