@@ -1,5 +1,6 @@
 import os
 import fnmatch
+import re
 from pathlib import Path
 from typing import List, Optional, Union, Iterator
 from .utils import recursive_scan
@@ -40,8 +41,8 @@ class FileSearcher:
         """
         results: List[Path] = []
         
-        if not case_sensitive:
-            pattern = pattern.lower()
+        regex_flags = 0 if case_sensitive else re.IGNORECASE
+        regex = re.compile(fnmatch.translate(pattern), flags=regex_flags)
         
         try:
             entries_iter: Iterator[os.DirEntry[str]]
@@ -52,10 +53,7 @@ class FileSearcher:
 
             for entry in entries_iter:
                 try:
-                    name = entry.name
-                    check_name = name if case_sensitive else name.lower()
-
-                    if fnmatch.fnmatch(check_name, pattern):
+                    if regex.match(entry.name):
                         results.append(Path(entry.path))
                 except OSError:
                     continue
@@ -83,6 +81,8 @@ class FileSearcher:
         if not search_term:
             return []
 
+        regex = re.compile(fnmatch.translate(file_pattern))
+
         try:
             # Iterate over all files recursively
             for entry in recursive_scan(directory):
@@ -90,7 +90,7 @@ class FileSearcher:
                     if not entry.is_file(follow_symlinks=False):
                         continue
 
-                    if not fnmatch.fnmatch(entry.name, file_pattern):
+                    if not regex.match(entry.name):
                         continue
 
                     file_path = Path(entry.path)
