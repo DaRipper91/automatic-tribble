@@ -33,7 +33,7 @@ async def test_load_theme_by_name_file_not_found(mock_config_manager):
     """Test that an error is logged when the theme file does not exist."""
     app = FileManagerApp()
     async with app.run_test() as pilot:
-        with patch.object(app, "log") as mock_log:
+        with patch("textual.Logger.__call__") as mock_log:
             with patch("src.file_manager.app.Path.exists", return_value=False):
                 app.load_theme_by_name("invalid_theme")
 
@@ -50,7 +50,7 @@ async def test_load_theme_by_name_exception(mock_config_manager):
     async with app.run_test() as pilot:
         with patch("src.file_manager.app.Path.exists", return_value=True), \
              patch("src.file_manager.app.open", side_effect=OSError("Read error")), \
-             patch.object(app, "log") as mock_log:
+             patch("textual.Logger.__call__") as mock_log:
 
             app.load_theme_by_name("error_theme")
 
