@@ -441,7 +441,7 @@ class FileOrganizer:
         return extension_map.get(extension)
     
     @staticmethod
-    def _compute_file_hash(file_path: Path, chunk_size: int = 8192) -> str:
+    def _compute_file_hash(file_path: Path, chunk_size: int = 131072) -> str:
         """
         Compute SHA256 hash of a file.
         """
