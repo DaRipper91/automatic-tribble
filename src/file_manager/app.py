@@ -44,16 +44,18 @@ class FileManagerApp(App):
         """Load a specific theme by name."""
         try:
             theme_path = Path(__file__).parent / "themes" / f"{theme_name}.tcss"
-            if theme_path.exists():
-                with open(theme_path, "r") as f:
-                    theme_css = f.read()
-                    # Add new theme variables. Textual resolves CSS cascades,
-                    # so adding it as a source overrides existing variables.
-                    self.stylesheet.add_source(theme_css, is_default_css=False)
-                    self.refresh_css()
+            if not theme_path.exists():
+                raise FileNotFoundError(f"Theme file not found: {theme_path}")
+
+            with open(theme_path, "r") as f:
+                theme_css = f.read()
+                # Add new theme variables. Textual resolves CSS cascades,
+                # so adding it as a source overrides existing variables.
+                self.stylesheet.add_source(theme_css, is_default_css=False)
+                self.refresh_css()
         except Exception as e:
             # Fallback to defaults if theme loading fails
-            print(f"Failed to load theme {theme_name}: {e}")
+            self.log(f"Failed to load theme {theme_name}: {e}")
 
 
 def main():
