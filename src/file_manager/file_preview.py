@@ -8,6 +8,12 @@ from textual.reactive import reactive
 from rich.syntax import Syntax
 from rich.panel import Panel
 
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp'}
+TEXT_EXTENSIONS = {
+    '.txt', '.py', '.md', '.json', '.yaml', '.yml', '.js',
+    '.html', '.css', '.sh', '.c', '.cpp', '.h', '.tcss'
+}
+
 class FilePreview(Static):
     """A widget to preview file contents."""
 
@@ -52,9 +58,9 @@ class FilePreview(Static):
 
             # Determine type
             suffix = path.suffix.lower()
-            if suffix in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
+            if suffix in IMAGE_EXTENSIONS:
                 await self._show_image_metadata(path)
-            elif suffix in ['.txt', '.py', '.md', '.json', '.yaml', '.yml', '.js', '.html', '.css', '.sh', '.c', '.cpp', '.h', '.tcss']:
+            elif suffix in TEXT_EXTENSIONS:
                 await self._show_text_content(path)
             else:
                 # Try to read as text first, if fails, hex dump
