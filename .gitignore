@@ -42,3 +42,8 @@ repomix-output.json
 repomix-output.md
 .mypy_cache/
 .mypy_cache/
+
+# AI-generated indexes/reports (regenerate on demand)
+DIRECTORY_INDEX.md
+PROJECT_REPORT.md
+REALITY_CHECK.md
