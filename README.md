@@ -1,4 +1,11 @@
-# 📁 TFM - The Future Manager
+# 📁 TFM - The Future Manager (Merged into Scout-Organizer)
+
+> [!NOTE]
+> **TFM (The Future Manager / automatic-tribble) has been merged into [Scout-Organizer](https://github.com/DaRipper91/Scout-Organizer).**  
+> The dual-pane file management engine, async file operations, tag management, cron scheduler, and AI modes have been unified into Scout-Organizer.
+>
+> For active development, releases, and documentation, visit:  
+> **[https://github.com/DaRipper91/Scout-Organizer](https://github.com/DaRipper91/Scout-Organizer)**
 
 ![Python](https://img.shields.io/badge/python-3.8%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
